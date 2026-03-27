@@ -1,0 +1,13 @@
+name: playwright-py
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10
+  - pip
+  - pip:
+      - pytest-playwright
+      - playwright
+      - pytest-html
+      - pytest-asyncio
+      - pytest-xdist
