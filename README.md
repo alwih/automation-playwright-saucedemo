@@ -44,7 +44,7 @@ We use `conda` to manage a clean Python environment (Python 3.10+). Follow these
 ├── conftest.py            # Shared constants, helpers (sync + async) and async fixtures
 ├── test_login.py          # Login tests, sync API (step-by-step)
 ├── test_login_async.py    # The same login tests, async API (+ a concurrent login test)
-├── test_cart.py           # Add-to-cart test, sync API
+├── test_cart.py           # Cart tests, sync API
 ├── environment.yml        # Conda environment config (name, Python version, pip packages)
 └── .gitignore
 ```
@@ -144,7 +144,15 @@ Once sync Playwright starts, it keeps its event loop marked as "running" until t
 | `test_inventory_requires_login` | Opening `/inventory.html` without logging in redirects back with an error |
 | `test_concurrent_logins` *(async only)* | All 5 working users log in at the same time |
 
-`test_cart.py` → `test_add_to_cart`: adds the Sauce Labs Backpack, checks the cart badge shows `1`, then opens the cart and checks the item is there.
+### What the cart tests cover
+`test_cart.py` (sync API only), every test logs in as `standard_user`:
+
+| Test | What it checks |
+| --- | --- |
+| `test_add_to_cart` | Adding the Sauce Labs Backpack shows `1` on the cart badge and the item is in the cart |
+| `test_add_all_items_to_cart` | *Edge case:* all 6 products can be added; badge shows `6` and the cart lists them in inventory order |
+| `test_remove_last_item_empties_cart` | *Edge case:* removing the only item leaves the cart empty and hides the badge (it never shows `0`) |
+| `test_cart_persists_after_logout` | *Edge case:* the cart is kept in localStorage, so it survives logging out and back in |
 
 ## 🚀 4. Running the Tests
 
