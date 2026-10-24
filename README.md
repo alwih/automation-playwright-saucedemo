@@ -1,6 +1,6 @@
 # Playwright Python Starter Guide (SauceDemo)
 
-This project is a beginner-friendly introduction to UI automation using [Playwright](https://playwright.dev/python/) and [Miniconda](https://docs.anaconda.com/miniconda/). It tests login, cart, checkout and product sorting on `https://www.saucedemo.com`. The login and cart suites are written twice, once with Playwright's **sync** API and once with its **async** API, so you can compare them side by side. The checkout and sorting suites use the sync API only.
+This project is a beginner-friendly introduction to UI automation using [Playwright](https://playwright.dev/python/) and [Miniconda](https://docs.anaconda.com/miniconda/). It tests login, cart, checkout, product sorting and the product detail page on `https://www.saucedemo.com`. The login and cart suites are written twice, once with Playwright's **sync** API and once with its **async** API, so you can compare them side by side. The checkout, sorting and product detail suites use the sync API only.
 
 ## 🛠️ 1. Setup Environment (Miniconda)
 
@@ -48,6 +48,7 @@ We use `conda` to manage a clean Python environment (Python 3.10+). Follow these
 ├── test_cart_async.py     # The same cart tests, async API
 ├── test_checkout.py       # Checkout tests, sync API only
 ├── test_sorting.py        # Product sorting tests, sync API only
+├── test_product_detail.py # Product detail page tests, sync API only
 ├── environment.yml        # Conda environment config (name, Python version, pip packages)
 └── .gitignore
 ```
@@ -69,7 +70,7 @@ pytest loads `conftest.py` automatically. It holds everything the test files sha
 Playwright offers two ways to write code: **Sync** and **Async**.
 
 ### Sync (Synchronous)
-Used in `test_login.py`, `test_cart.py`, `test_checkout.py` and `test_sorting.py`. The code waits for each line to finish before moving to the next.
+Used in `test_login.py`, `test_cart.py`, `test_checkout.py`, `test_sorting.py` and `test_product_detail.py`. The code waits for each line to finish before moving to the next.
 - Easy to read and debug for beginners.
 - No `await` keywords needed.
 
@@ -135,6 +136,8 @@ Once sync Playwright starts, it keeps its event loop marked as "running" until t
 - **Checkout Complete:** `[data-test="complete-header"]`, button `[data-test="back-to-products"]`
 - **Sort Dropdown:** `[data-test="product-sort-container"]` (option values `az`, `za`, `lohi`, `hilo`), label shown on it `[data-test="active-option"]`
 - **Product Name / Price:** `[data-test="inventory-item-name"]`, `[data-test="inventory-item-price"]`
+- **Product Card Links:** `[data-test="item-<id>-title-link"]` (the name), `[data-test="item-<id>-img-link"]` (the image), e.g. `item-4-title-link` for the Backpack
+- **Product Detail Page:** scope `.inventory_details_container` (it reuses the products page's `inventory-item-name` / `-desc` / `-price` data-tests), image `.inventory_details_img`, buttons `[data-test="add-to-cart"]` / `[data-test="remove"]` (no product suffix), `[data-test="back-to-products"]`
 
 ### What the login tests cover
 `test_login.py` and `test_login_async.py` contain the same cases (password for every user is `secret_sauce`):
@@ -202,6 +205,22 @@ Once sync Playwright starts, it keeps its event loop marked as "running" until t
 | `test_sort_moves_whole_cards` | Edge case | Every product keeps its own price after sorting |
 | `test_sort_resets_after_leaving_page` | Edge case | The chosen sort isn't remembered: going to the cart and back, or reloading, brings back A to Z |
 
+### What the product detail tests cover
+`test_product_detail.py` is sync only. Tests log in as `standard_user` unless the table says otherwise. A detail page's URL is `/inventory-item.html?id=<id>`:
+
+| Test | Type | What it checks |
+| --- | --- | --- |
+| `test_detail_matches_inventory_card[...]` | Positive | For each of the 6 products, clicking its name opens its detail page, which shows the same description, price and image as its card (read off the products page, not hard-coded) |
+| `test_open_product_from_image` | Positive | The product image opens the same detail page as the name |
+| `test_back_to_products` | Positive | Back to Products returns to the products page |
+| `test_remove_from_detail_page` | Positive | An item already in the cart shows Remove on its detail page; Remove there hides the badge, and the products page shows "Add to cart" for it again |
+| `test_unknown_product_id[...]` | Negative | `?id=6`, `?id=99`, `?id=abc` and no id all show "ITEM NOT FOUND" |
+| `test_not_found_item_cannot_be_added_to_cart` | Negative (`xfail`) | Add to cart on "ITEM NOT FOUND" shouldn't change the cart, but saucedemo shows `1` on the badge while the cart lists nothing. Marked as an expected failure; it turns red if the site ever fixes the bug |
+| `test_product_detail_requires_login` | Negative | Opening a detail page without logging in redirects back with an error |
+| `test_problem_user_opens_wrong_product[...]` | Negative | For `problem_user`, every product links to the next id: the Backpack opens the Fleece Jacket, and the Fleece Jacket opens "ITEM NOT FOUND" |
+| `test_broken_cart_buttons_on_detail_page[...]` | Negative | `problem_user` and `error_user` have the same broken buttons on the detail page as on the products page: Bolt T-Shirt can't be added and nothing can be removed |
+| `test_detail_page_survives_reload` | Edge case | Reloading a detail page keeps the product and the cart |
+
 ## 🚀 4. Running the Tests
 
 To run the tests and see the results:
@@ -217,6 +236,7 @@ pytest test_cart.py           # sync cart tests
 pytest test_cart_async.py     # async cart tests
 pytest test_checkout.py       # checkout tests (sync only)
 pytest test_sorting.py        # sorting tests (sync only)
+pytest test_product_detail.py # product detail tests (sync only)
 
 # Run one test by name (in every file that has it)
 pytest -k test_valid_login
