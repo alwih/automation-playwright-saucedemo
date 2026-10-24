@@ -145,14 +145,22 @@ Once sync Playwright starts, it keeps its event loop marked as "running" until t
 | `test_concurrent_logins` *(async only)* | All 5 working users log in at the same time |
 
 ### What the cart tests cover
-`test_cart.py` (sync API only), every test logs in as `standard_user`:
+`test_cart.py` (sync API only). Tests log in as `standard_user` unless the table says otherwise:
 
-| Test | What it checks |
-| --- | --- |
-| `test_add_to_cart` | Adding the Sauce Labs Backpack shows `1` on the cart badge and the item is in the cart |
-| `test_add_all_items_to_cart` | *Edge case:* all 6 products can be added; badge shows `6` and the cart lists them in inventory order |
-| `test_remove_last_item_empties_cart` | *Edge case:* removing the only item leaves the cart empty and hides the badge (it never shows `0`) |
-| `test_cart_persists_after_logout` | *Edge case:* the cart is kept in localStorage, so it survives logging out and back in |
+| Test | Type | What it checks |
+| --- | --- | --- |
+| `test_add_to_cart` | Positive | Adding the Sauce Labs Backpack shows `1` on the cart badge and the item is in the cart |
+| `test_add_to_cart_from_product_page` | Positive | An item can be added from its own product page; the button turns into Remove |
+| `test_remove_item_from_products_page` | Positive | Remove on the products page takes the item out of the cart and lowers the badge |
+| `test_cart_shows_item_details` | Positive | The cart row shows quantity `1`, the name and the same price as the products page |
+| `test_cart_navigation` | Positive | Continue Shopping goes back to the products page (cart kept); Checkout opens checkout step one |
+| `test_cart_requires_login` | Negative | Opening `/cart.html` without logging in redirects back with an error |
+| `test_broken_add_to_cart_buttons[...]` | Negative | `problem_user` and `error_user` can't add Bolt T-Shirt, Fleece Jacket or Test.allTheThings() T-Shirt |
+| `test_broken_remove_button[...]` | Negative | `problem_user` and `error_user` can't remove items from the products page |
+| `test_checkout_disabled_for_empty_cart` | Negative (`xfail`) | Checkout should be blocked for an empty cart, but saucedemo allows it. Marked as an expected failure; it turns red if the site ever fixes the bug |
+| `test_add_all_items_to_cart` | Edge case | All 6 products can be added; badge shows `6` and the cart lists them in inventory order |
+| `test_remove_last_item_empties_cart` | Edge case | Removing the only item leaves the cart empty and hides the badge (it never shows `0`) |
+| `test_cart_persists_after_logout` | Edge case | The cart is kept in localStorage, so it survives logging out and back in |
 
 ## 🚀 4. Running the Tests
 
