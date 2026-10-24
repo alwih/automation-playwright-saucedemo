@@ -1,6 +1,6 @@
 # Playwright Python Starter Guide (SauceDemo)
 
-This project is a beginner-friendly introduction to UI automation using [Playwright](https://playwright.dev/python/) and [Miniconda](https://docs.anaconda.com/miniconda/). It tests login and add-to-cart scenarios on `https://www.saucedemo.com`. The login suite is written twice, once with Playwright's **sync** API and once with its **async** API, so you can compare them side by side.
+This project is a beginner-friendly introduction to UI automation using [Playwright](https://playwright.dev/python/) and [Miniconda](https://docs.anaconda.com/miniconda/). It tests login and cart scenarios on `https://www.saucedemo.com`. Both the login and the cart suites are written twice, once with Playwright's **sync** API and once with its **async** API, so you can compare them side by side.
 
 ## 🛠️ 1. Setup Environment (Miniconda)
 
@@ -44,7 +44,8 @@ We use `conda` to manage a clean Python environment (Python 3.10+). Follow these
 ├── conftest.py            # Shared constants, helpers (sync + async) and async fixtures
 ├── test_login.py          # Login tests, sync API (step-by-step)
 ├── test_login_async.py    # The same login tests, async API (+ a concurrent login test)
-├── test_cart.py           # Cart tests, sync API
+├── test_cart.py           # Cart tests, sync API (positive, negative and edge cases)
+├── test_cart_async.py     # The same cart tests, async API
 ├── environment.yml        # Conda environment config (name, Python version, pip packages)
 └── .gitignore
 ```
@@ -71,7 +72,7 @@ Used in `test_login.py` and `test_cart.py`. The code waits for each line to fini
 - No `await` keywords needed.
 
 ### Async (Asynchronous)
-Used in `test_login_async.py`. While waiting for the browser, the code pauses and lets other async work run.
+Used in `test_login_async.py` and `test_cart_async.py`. While waiting for the browser, the code pauses and lets other async work run.
 - Needed if you want to drive several browsers/pages at the same time in one test, or integrate with async apps.
 - Uses `async def` and `await`.
 
@@ -95,7 +96,7 @@ pytest-playwright's built-in `page` fixture only supports the sync API, so `conf
 - **`async_browser`** (session scope): starts Playwright and launches **one** browser for the whole run. It reuses pytest-playwright's options, so `--browser`, `--headed` and `--slowmo` work for async tests too.
 - **`async_page`** (function scope): opens a fresh browser context + page for **each** test, so cookies and storage never leak between tests (same isolation as the sync `page`).
 
-Both fixtures, and every test in `test_login_async.py`, share one session-wide event loop:
+Both fixtures, and every test in `test_login_async.py` and `test_cart_async.py`, share one session-wide event loop (each async file sets this at the top):
 
 ```python
 pytestmark = pytest.mark.asyncio(loop_scope="session")
@@ -113,7 +114,7 @@ await asyncio.gather(*(login_as(user) for user in LOGIN_USERS))
 It takes about as long as the slowest login (`performance_glitch_user`, ~5s) instead of the sum of all five.
 
 ### Running sync and async tests in the same run
-Once sync Playwright starts, it keeps its event loop marked as "running" until the pytest session ends, and any async test that runs after it fails. To avoid this, a hook in `conftest.py` (`pytest_collection_modifyitems`) moves **async tests to the front** of the run. That's why `test_login_async.py` runs before the sync files when you call plain `pytest`. This also works with `pytest -n`.
+Once sync Playwright starts, it keeps its event loop marked as "running" until the pytest session ends, and any async test that runs after it fails. To avoid this, a hook in `conftest.py` (`pytest_collection_modifyitems`) moves **async tests to the front** of the run. That's why `test_login_async.py` and `test_cart_async.py` run before the sync files when you call plain `pytest`. This also works with `pytest -n`.
 
 ### Key Selectors for SauceDemo:
 - **Username:** `input#user-name`
@@ -125,6 +126,8 @@ Once sync Playwright starts, it keeps its event loop marked as "running" until t
 - **Burger Menu / Logout:** `#react-burger-menu-btn` → `#logout_sidebar_link`
 - **Products Page:** `.inventory_list`, title `[data-test="title"]`
 - **Cart Badge / Link:** `.shopping_cart_badge`, `.shopping_cart_link`
+- **Add / Remove (products page):** `[data-test="add-to-cart-<product>"]`, `[data-test="remove-<product>"]`, e.g. `add-to-cart-sauce-labs-backpack`
+- **Cart Page:** rows `.cart_item`, buttons `[data-test="continue-shopping"]`, `[data-test="checkout"]`
 
 ### What the login tests cover
 `test_login.py` and `test_login_async.py` contain the same cases (password for every user is `secret_sauce`):
@@ -145,7 +148,7 @@ Once sync Playwright starts, it keeps its event loop marked as "running" until t
 | `test_concurrent_logins` *(async only)* | All 5 working users log in at the same time |
 
 ### What the cart tests cover
-`test_cart.py` (sync API only). Tests log in as `standard_user` unless the table says otherwise:
+`test_cart.py` and `test_cart_async.py` contain the same cases. Tests log in as `standard_user` unless the table says otherwise:
 
 | Test | Type | What it checks |
 | --- | --- | --- |
@@ -173,9 +176,12 @@ pytest
 # Run a specific file
 pytest test_login.py          # sync login tests
 pytest test_login_async.py    # async login tests
+pytest test_cart.py           # sync cart tests
+pytest test_cart_async.py     # async cart tests
 
 # Run one test by name (in every file that has it)
 pytest -k test_valid_login
+pytest -k test_add_to_cart    # also matches test_add_to_cart_from_product_page
 
 # Show each test name and its result
 pytest -v
