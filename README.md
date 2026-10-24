@@ -1,6 +1,6 @@
 # Playwright Python Starter Guide (SauceDemo)
 
-This project is a beginner-friendly introduction to UI automation using [Playwright](https://playwright.dev/python/) and [Miniconda](https://docs.anaconda.com/miniconda/). It tests login and cart scenarios on `https://www.saucedemo.com`. Both the login and the cart suites are written twice, once with Playwright's **sync** API and once with its **async** API, so you can compare them side by side.
+This project is a beginner-friendly introduction to UI automation using [Playwright](https://playwright.dev/python/) and [Miniconda](https://docs.anaconda.com/miniconda/). It tests login, cart, checkout and product sorting on `https://www.saucedemo.com`. The login and cart suites are written twice, once with Playwright's **sync** API and once with its **async** API, so you can compare them side by side. The checkout and sorting suites use the sync API only.
 
 ## 🛠️ 1. Setup Environment (Miniconda)
 
@@ -46,6 +46,8 @@ We use `conda` to manage a clean Python environment (Python 3.10+). Follow these
 ├── test_login_async.py    # The same login tests, async API (+ a concurrent login test)
 ├── test_cart.py           # Cart tests, sync API (positive, negative and edge cases)
 ├── test_cart_async.py     # The same cart tests, async API
+├── test_checkout.py       # Checkout tests, sync API only
+├── test_sorting.py        # Product sorting tests, sync API only
 ├── environment.yml        # Conda environment config (name, Python version, pip packages)
 └── .gitignore
 ```
@@ -67,7 +69,7 @@ pytest loads `conftest.py` automatically. It holds everything the test files sha
 Playwright offers two ways to write code: **Sync** and **Async**.
 
 ### Sync (Synchronous)
-Used in `test_login.py` and `test_cart.py`. The code waits for each line to finish before moving to the next.
+Used in `test_login.py`, `test_cart.py`, `test_checkout.py` and `test_sorting.py`. The code waits for each line to finish before moving to the next.
 - Easy to read and debug for beginners.
 - No `await` keywords needed.
 
@@ -128,6 +130,11 @@ Once sync Playwright starts, it keeps its event loop marked as "running" until t
 - **Cart Badge / Link:** `.shopping_cart_badge`, `.shopping_cart_link`
 - **Add / Remove (products page):** `[data-test="add-to-cart-<product>"]`, `[data-test="remove-<product>"]`, e.g. `add-to-cart-sauce-labs-backpack`
 - **Cart Page:** rows `.cart_item`, buttons `[data-test="continue-shopping"]`, `[data-test="checkout"]`
+- **Checkout Form (step one):** `[data-test="firstName"]`, `[data-test="lastName"]`, `[data-test="postalCode"]`, buttons `[data-test="continue"]`, `[data-test="cancel"]`
+- **Checkout Overview (step two):** `[data-test="subtotal-label"]`, `[data-test="tax-label"]`, `[data-test="total-label"]`, `[data-test="payment-info-value"]`, `[data-test="shipping-info-value"]`, button `[data-test="finish"]`
+- **Checkout Complete:** `[data-test="complete-header"]`, button `[data-test="back-to-products"]`
+- **Sort Dropdown:** `[data-test="product-sort-container"]` (option values `az`, `za`, `lohi`, `hilo`), label shown on it `[data-test="active-option"]`
+- **Product Name / Price:** `[data-test="inventory-item-name"]`, `[data-test="inventory-item-price"]`
 
 ### What the login tests cover
 `test_login.py` and `test_login_async.py` contain the same cases (password for every user is `secret_sauce`):
@@ -139,7 +146,7 @@ Once sync Playwright starts, it keeps its event loop marked as "running" until t
 | `test_locked_out_user` | `locked_out_user` gets the "locked out" error and stays on the login page |
 | `test_problem_user` | Logs in, but every product shows the same broken `sl-404` image |
 | `test_performance_glitch_user` | Logs in after a ~5s delay (uses a 15s timeout) |
-| `test_error_user` | Logs in normally (its bugs appear later in cart/checkout) |
+| `test_error_user` | Logs in normally (its bugs appear later in cart, checkout and sorting) |
 | `test_visual_user` | Logs in, but the cart icon has the `visual_failure` class |
 | `test_login_then_logout[...]` | Every user that can log in can also log out via the burger menu |
 | `test_invalid_login[...]` | Empty fields, wrong password, unknown user, case-sensitive username → correct error text |
@@ -165,6 +172,36 @@ Once sync Playwright starts, it keeps its event loop marked as "running" until t
 | `test_remove_last_item_empties_cart` | Edge case | Removing the only item leaves the cart empty and hides the badge (it never shows `0`) |
 | `test_cart_persists_after_logout` | Edge case | The cart is kept in localStorage, so it survives logging out and back in |
 
+### What the checkout tests cover
+`test_checkout.py` is sync only. Tests log in as `standard_user` unless the table says otherwise:
+
+| Test | Type | What it checks |
+| --- | --- | --- |
+| `test_complete_checkout` | Positive | Cart → Your Information → Overview → Finish shows "Thank you for your order!" and hides the badge; Back Home returns to the products page with an empty cart |
+| `test_checkout_overview_totals` | Positive | With 2 items: Item total is the sum of the prices, Tax is 8% and Total adds them up (computed from the prices on the page); payment and shipping info are shown |
+| `test_checkout_overview_lists_items` | Positive | The Overview lists the same names, quantities and prices as the cart |
+| `test_checkout_required_fields[...]` | Negative | An empty first name, last name or postal code shows "Error: … is required" and the page stays on step one |
+| `test_close_checkout_error` | Negative | The ✕ button hides the form's error banner |
+| `test_checkout_requires_login[...]` | Negative | Opening any checkout page without logging in redirects back with an error |
+| `test_problem_user_last_name_overwrites_first_name` | Negative | For `problem_user`, typing a last name replaces the first name, so Continue fails |
+| `test_error_user_cannot_finish` | Negative | For `error_user`, the Last Name field ignores typing and Finish crashes, so the order never goes through |
+| `test_checkout_cancel_buttons` | Edge case | Cancel on step one goes back to the cart and Cancel on the Overview goes back to the products page; the cart is kept |
+
+### What the sorting tests cover
+`test_sorting.py` is sync only. Tests log in as `standard_user` unless the table says otherwise. The expected order is computed with Python's `sorted()` from the names and prices on the page, not hard-coded:
+
+| Test | Type | What it checks |
+| --- | --- | --- |
+| `test_sort_options` | Positive | The dropdown lists exactly Name (A to Z), Name (Z to A), Price (low to high) and Price (high to low) |
+| `test_default_sort_is_name_a_to_z` | Positive | Products start sorted by name, A to Z |
+| `test_sort_by_name` | Positive | Name (Z to A) reverses the list and Name (A to Z) puts it back |
+| `test_sort_by_price[...]` | Positive | Price (low to high) and Price (high to low) order the prices correctly |
+| `test_problem_user_sort_does_nothing[...]` | Negative | For `problem_user`, picking a sort option changes nothing |
+| `test_error_user_sort_shows_alert` | Negative | For `error_user`, sorting shows a "Sorting is broken!" alert and the list stays A to Z |
+| `test_sort_keeps_cart` | Edge case | Re-sorting keeps the cart badge and the Remove buttons |
+| `test_sort_moves_whole_cards` | Edge case | Every product keeps its own price after sorting |
+| `test_sort_resets_after_leaving_page` | Edge case | The chosen sort isn't remembered: going to the cart and back, or reloading, brings back A to Z |
+
 ## 🚀 4. Running the Tests
 
 To run the tests and see the results:
@@ -178,6 +215,8 @@ pytest test_login.py          # sync login tests
 pytest test_login_async.py    # async login tests
 pytest test_cart.py           # sync cart tests
 pytest test_cart_async.py     # async cart tests
+pytest test_checkout.py       # checkout tests (sync only)
+pytest test_sorting.py        # sorting tests (sync only)
 
 # Run one test by name (in every file that has it)
 pytest -k test_valid_login
