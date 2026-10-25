@@ -3,11 +3,7 @@ channels:
   - conda-forge
   - defaults
 dependencies:
-  - python=3.10
+  - python=3.11
   - pip
   - pip:
-      - pytest-playwright
-      - playwright
-      - pytest-html
-      - pytest-asyncio
-      - pytest-xdist
+      - -r requirements.txt
