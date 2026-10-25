@@ -1,17 +1,17 @@
 import pytest
 from playwright.sync_api import Page, expect
+from config import BASE_URL
 from conftest import (
-    BASE_URL,
     INVENTORY_URL,
     get_error_message,
     login_to_saucedemo,
     logout_from_saucedemo,
 )
+from data.products import BOLT_T_SHIRT, FLEECE_JACKET, RED_T_SHIRT
+from data.users import BROKEN_CART_USERS
 
-# Users whose cart buttons are broken on purpose
-BROKEN_CART_USERS = ["problem_user", "error_user"]
-# Products these users can't add to the cart
-BROKEN_ADD_PRODUCTS = ["sauce-labs-bolt-t-shirt", "sauce-labs-fleece-jacket", "test.allthethings()-t-shirt-(red)"]
+# Products the BROKEN_CART_USERS can't add to the cart
+BROKEN_ADD_PRODUCTS = [BOLT_T_SHIRT, FLEECE_JACKET, RED_T_SHIRT]
 
 def test_add_to_cart(page: Page):
     login_to_saucedemo(page)
@@ -105,7 +105,7 @@ def test_broken_add_to_cart_buttons(page: Page, username: str):
     login_to_saucedemo(page, username=username)
 
     for product in BROKEN_ADD_PRODUCTS:
-        add_button = page.locator(f"button[data-test='add-to-cart-{product}']")
+        add_button = page.locator(f"button[data-test='add-to-cart-{product.slug}']")
         add_button.click()
         expect(add_button).to_be_visible()
     cart_badge = page.locator(".shopping_cart_badge")

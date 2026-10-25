@@ -2,20 +2,10 @@ import pytest
 import pytest_asyncio
 from playwright.async_api import Page as AsyncPage, async_playwright, expect as async_expect
 from playwright.sync_api import Page, expect
+from config import BASE_URL
+from data.users import PASSWORD
 
-BASE_URL = "https://www.saucedemo.com"
 INVENTORY_URL = f"{BASE_URL}/inventory.html"
-PASSWORD = "secret_sauce"
-
-# All usernames listed on the SauceDemo login page
-ACCEPTED_USERS = [
-    "standard_user",
-    "locked_out_user",
-    "problem_user",
-    "performance_glitch_user",
-    "error_user",
-    "visual_user",
-]
 
 def login_to_saucedemo(page: Page, username: str = "standard_user", password: str = PASSWORD):
     page.goto(BASE_URL)

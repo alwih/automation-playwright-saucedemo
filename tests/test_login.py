@@ -2,18 +2,14 @@ import re
 
 import pytest
 from playwright.sync_api import Page, expect
+from config import BASE_URL
 from conftest import (
-    ACCEPTED_USERS,
-    BASE_URL,
-    PASSWORD,
     expect_inventory_page,
     get_error_message,
     login_to_saucedemo,
     logout_from_saucedemo,
 )
-
-# Every accepted user except locked_out_user can log in
-LOGIN_USERS = [user for user in ACCEPTED_USERS if user != "locked_out_user"]
+from data.users import ACCEPTED_USERS, LOGIN_USERS, PASSWORD
 
 def test_accepted_users_listed_on_login_page(page: Page):
     # Fails if SauceDemo adds/removes a user, so this suite stays in sync

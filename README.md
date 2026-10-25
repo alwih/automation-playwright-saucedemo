@@ -4,11 +4,11 @@ This project is a beginner-friendly introduction to UI automation using [Playwri
 
 ## 🛠️ 1. Setup Environment (Miniconda)
 
-We use `conda` to manage a clean Python environment (Python 3.10+). Follow these steps to get started:
+We use `conda` to manage a clean Python environment (Python 3.11). Follow these steps to get started:
 
 1. **Create the environment:**
    ```bash
-   conda create -n playwright-py python=3.10 -y
+   conda create -n playwright-py python=3.11 -y
    ```
    Or create it, with all dependencies included, from the config file (then skip step 3):
    ```bash
@@ -20,9 +20,9 @@ We use `conda` to manage a clean Python environment (Python 3.10+). Follow these
    conda activate playwright-py
    ```
 
-3. **Install dependencies:**
+3. **Install dependencies** (pinned versions, from `requirements.txt`):
    ```bash
-   pip install pytest-playwright playwright pytest-asyncio pytest-xdist
+   pip install -r requirements.txt
    ```
    | Package | Why we need it |
    | --- | --- |
@@ -41,26 +41,33 @@ We use `conda` to manage a clean Python environment (Python 3.10+). Follow these
 
 ```text
 .
-├── conftest.py             # Shared constants, helpers (sync + async) and async fixtures
-├── test_login.py           # Login tests, sync API (step-by-step)
-├── test_login_async.py     # The same login tests, async API (+ a concurrent login test)
-├── test_cart.py            # Cart tests, sync API (positive, negative and edge cases)
-├── test_cart_async.py      # The same cart tests, async API
-├── test_checkout.py        # Checkout tests, sync API only
-├── test_sorting.py         # Product sorting tests, sync API only
-├── test_product_detail.py  # Product detail page tests, sync API only
-├── test_menu.py            # Burger menu + footer tests, sync API only
-├── test_dynamic_catalog.py # Dynamic Catalog pages (lazy load, spinner, slider), sync API only
-├── environment.yml         # Conda environment config (name, Python version, pip packages)
+├── tests/
+│   ├── conftest.py             # Shared helpers (sync + async) and async fixtures
+│   ├── test_login.py           # Login tests, sync API (step-by-step)
+│   ├── test_login_async.py     # The same login tests, async API (+ a concurrent login test)
+│   ├── test_cart.py            # Cart tests, sync API (positive, negative and edge cases)
+│   ├── test_cart_async.py      # The same cart tests, async API
+│   ├── test_checkout.py        # Checkout tests, sync API only
+│   ├── test_sorting.py         # Product sorting tests, sync API only
+│   ├── test_product_detail.py  # Product detail page tests, sync API only
+│   ├── test_menu.py            # Burger menu + footer tests, sync API only
+│   └── test_dynamic_catalog.py # Dynamic Catalog pages (lazy load, spinner, slider), sync API only
+├── data/
+│   ├── users.py                # Password, the accepted users and the users with broken cart buttons
+│   └── products.py             # The 6 products (id, name, cart-button slug, price)
+├── config.py                   # BASE_URL (override with the BASE_URL environment variable)
+├── pyproject.toml              # pytest settings (test folder, import path, default options)
+├── requirements.txt            # Pinned Python packages
+├── environment.yml             # Conda environment config (name, Python version, installs requirements.txt)
 └── .gitignore
 ```
 
 ### `conftest.py`, the shared toolbox
-pytest loads `conftest.py` automatically. It holds everything the test files share:
+pytest loads `tests/conftest.py` automatically. It holds the helpers the test files share. Test data lives in `data/` and the site URL in `config.py`:
 
 | Name | Sync version | Async version |
 | --- | --- | --- |
-| Constants | `BASE_URL`, `INVENTORY_URL`, `PASSWORD`, `ACCEPTED_USERS` | (shared) |
+| Constants | `BASE_URL` (`config.py`), `INVENTORY_URL`, `PASSWORD` / `ACCEPTED_USERS` / `LOGIN_USERS` / `BROKEN_CART_USERS` (`data/users.py`), `Product` + `PRODUCTS` (`data/products.py`) | (shared) |
 | Log in | `login_to_saucedemo(page, ...)` | `await login_to_saucedemo_async(page, ...)` |
 | Log out (burger menu) | `logout_from_saucedemo(page)` | `await logout_from_saucedemo_async(page)` |
 | Error banner locator | `get_error_message(page)` | `get_error_message(page)` (same function, see below) |
@@ -276,19 +283,19 @@ Once sync Playwright starts, it keeps its event loop marked as "running" until t
 To run the tests and see the results:
 
 ```bash
-# Run all tests (sync + async)
+# Run all tests (sync + async); pyproject.toml points pytest at tests/
 pytest
 
 # Run a specific file
-pytest test_login.py           # sync login tests
-pytest test_login_async.py     # async login tests
-pytest test_cart.py            # sync cart tests
-pytest test_cart_async.py      # async cart tests
-pytest test_checkout.py        # checkout tests (sync only)
-pytest test_sorting.py         # sorting tests (sync only)
-pytest test_product_detail.py  # product detail tests (sync only)
-pytest test_menu.py            # burger menu + footer tests (sync only)
-pytest test_dynamic_catalog.py # Dynamic Catalog tests (sync only)
+pytest tests/test_login.py           # sync login tests
+pytest tests/test_login_async.py     # async login tests
+pytest tests/test_cart.py            # sync cart tests
+pytest tests/test_cart_async.py      # async cart tests
+pytest tests/test_checkout.py        # checkout tests (sync only)
+pytest tests/test_sorting.py         # sorting tests (sync only)
+pytest tests/test_product_detail.py  # product detail tests (sync only)
+pytest tests/test_menu.py            # burger menu + footer tests (sync only)
+pytest tests/test_dynamic_catalog.py # Dynamic Catalog tests (sync only)
 
 # Run one test by name (in every file that has it)
 pytest -k test_valid_login
@@ -298,7 +305,7 @@ pytest -k test_add_to_cart     # also matches test_add_to_cart_from_product_page
 pytest -v
 
 # Run tests in parallel (2 workers)
-pytest -n 2 test_login.py test_login_async.py
+pytest -n 2 tests/test_login.py tests/test_login_async.py
 
 # Run with browser visible (headed mode)
 pytest --headed

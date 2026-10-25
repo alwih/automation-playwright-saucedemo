@@ -3,23 +3,19 @@ import re
 
 import pytest
 from playwright.async_api import Browser, Page, expect
+from config import BASE_URL
 from conftest import (
-    ACCEPTED_USERS,
-    BASE_URL,
-    PASSWORD,
     expect_inventory_page_async,
     get_error_message,
     login_to_saucedemo_async,
     logout_from_saucedemo_async,
 )
+from data.users import ACCEPTED_USERS, LOGIN_USERS, PASSWORD
 
 # Async mirror of test_login.py: same cases, written with the async API (`async def` + `await`)
 
 # Every test in this file runs on the session-wide event loop shared with the async fixtures
 pytestmark = pytest.mark.asyncio(loop_scope="session")
-
-# Every accepted user except locked_out_user can log in
-LOGIN_USERS = [user for user in ACCEPTED_USERS if user != "locked_out_user"]
 
 async def test_accepted_users_listed_on_login_page(async_page: Page):
     # Fails if SauceDemo adds/removes a user, so this suite stays in sync

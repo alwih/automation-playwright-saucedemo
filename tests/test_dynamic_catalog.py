@@ -1,22 +1,13 @@
 from datetime import datetime, timedelta
 import pytest
 from playwright.sync_api import Page, expect
+from config import BASE_URL
 from conftest import (
-    BASE_URL,
     expect_inventory_page,
     get_error_message,
     login_to_saucedemo,
 )
-
-# The 6 products in id order (0-5): the order of the spinner grid, the slider and its dots
-PRODUCTS = [
-    ("Sauce Labs Bike Light", "$9.99"),
-    ("Sauce Labs Bolt T-Shirt", "$15.99"),
-    ("Sauce Labs Onesie", "$7.99"),
-    ("Test.allTheThings() T-Shirt (Red)", "$15.99"),
-    ("Sauce Labs Backpack", "$29.99"),
-    ("Sauce Labs Fleece Jacket", "$49.99"),
-]
+from data.products import PRODUCTS
 
 # Lazy Load: the ">" keeps the -img / -name / -price inside each card out of the match
 LAZY_CARDS = "[data-test='dynamic-catalog-lazy-load-container'] > [data-test^='lazy-load-item-']"
@@ -65,10 +56,10 @@ def load_next_batch(page: Page, count: int):
 
 def expect_slide(page: Page, index: int):
     """Assert the slider shows PRODUCTS[index] and only its dot is marked current"""
-    name, price = PRODUCTS[index]
-    expect(page.locator("[data-test='dynamic-catalog-slider-item-name']")).to_have_text(name)
-    expect(page.locator("[data-test='dynamic-catalog-slider-item-price']")).to_have_text(price)
-    expect(page.locator("[data-test='dynamic-catalog-slider-item-img']")).to_have_attribute("alt", name)
+    product = PRODUCTS[index]
+    expect(page.locator("[data-test='dynamic-catalog-slider-item-name']")).to_have_text(product.name)
+    expect(page.locator("[data-test='dynamic-catalog-slider-item-price']")).to_have_text(product.price)
+    expect(page.locator("[data-test='dynamic-catalog-slider-item-img']")).to_have_attribute("alt", product.name)
     expect(page.locator(f"[data-test='dynamic-catalog-slider-dot-{index}']")).to_have_attribute("aria-current", "true")
     expect(page.locator(CURRENT_DOT)).to_have_count(1)
 
@@ -154,8 +145,8 @@ def test_spinner_then_products(page: Page):
 
     expect(spinner).to_have_count(0)
     grid = page.locator(SPINNER_GRID)
-    expect(grid.locator("[data-test$='-name']")).to_have_text([name for name, _ in PRODUCTS])
-    expect(grid.locator("[data-test$='-price']")).to_have_text([price for _, price in PRODUCTS])
+    expect(grid.locator("[data-test$='-name']")).to_have_text([product.name for product in PRODUCTS])
+    expect(grid.locator("[data-test$='-price']")).to_have_text([product.price for product in PRODUCTS])
 
 def test_spinner_wait_bounds(page: Page):
     # Edge case: the site waits a random 0.5-3 s, so the spinner is still there at 499 ms and gone by 3000 ms
@@ -174,8 +165,8 @@ def test_slider_starts_on_first_product(page: Page):
     go_to_dynamic_page(page, "slider", freeze_clock=True)
 
     expect(page.locator(SLIDER_DOTS)).to_have_count(len(PRODUCTS))
-    for index, (name, _) in enumerate(PRODUCTS):
-        expect(page.locator(f"[data-test='dynamic-catalog-slider-dot-{index}']")).to_have_attribute("aria-label", f"Show {name}")
+    for index, product in enumerate(PRODUCTS):
+        expect(page.locator(f"[data-test='dynamic-catalog-slider-dot-{index}']")).to_have_attribute("aria-label", f"Show {product.name}")
     expect_slide(page, 0)
 
 def test_slider_cycles_through_products(page: Page):

@@ -1,8 +1,8 @@
 import re
 import pytest
 from playwright.sync_api import Page, expect
+from config import BASE_URL
 from conftest import (
-    BASE_URL,
     INVENTORY_URL,
     expect_inventory_page,
     get_error_message,
