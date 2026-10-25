@@ -1,6 +1,6 @@
 # Playwright Python Starter Guide (SauceDemo)
 
-This project is a beginner-friendly introduction to UI automation using [Playwright](https://playwright.dev/python/) and [Miniconda](https://docs.anaconda.com/miniconda/). It tests login, cart, checkout, product sorting and the product detail page on `https://www.saucedemo.com`. The login and cart suites are written twice, once with Playwright's **sync** API and once with its **async** API, so you can compare them side by side. The checkout, sorting and product detail suites use the sync API only.
+This project is a beginner-friendly introduction to UI automation using [Playwright](https://playwright.dev/python/) and [Miniconda](https://docs.anaconda.com/miniconda/). It tests login, cart, checkout, product sorting, the product detail page, and the burger menu + footer on `https://www.saucedemo.com`. The login and cart suites are written twice, once with Playwright's **sync** API and once with its **async** API, so you can compare them side by side. The checkout, sorting, product detail and menu suites use the sync API only.
 
 ## 🛠️ 1. Setup Environment (Miniconda)
 
@@ -49,6 +49,7 @@ We use `conda` to manage a clean Python environment (Python 3.10+). Follow these
 ├── test_checkout.py       # Checkout tests, sync API only
 ├── test_sorting.py        # Product sorting tests, sync API only
 ├── test_product_detail.py # Product detail page tests, sync API only
+├── test_menu.py           # Burger menu + footer tests, sync API only
 ├── environment.yml        # Conda environment config (name, Python version, pip packages)
 └── .gitignore
 ```
@@ -70,7 +71,7 @@ pytest loads `conftest.py` automatically. It holds everything the test files sha
 Playwright offers two ways to write code: **Sync** and **Async**.
 
 ### Sync (Synchronous)
-Used in `test_login.py`, `test_cart.py`, `test_checkout.py`, `test_sorting.py` and `test_product_detail.py`. The code waits for each line to finish before moving to the next.
+Used in `test_login.py`, `test_cart.py`, `test_checkout.py`, `test_sorting.py`, `test_product_detail.py` and `test_menu.py`. The code waits for each line to finish before moving to the next.
 - Easy to read and debug for beginners.
 - No `await` keywords needed.
 
@@ -126,7 +127,11 @@ Once sync Playwright starts, it keeps its event loop marked as "running" until t
 - **Error Message:** `[data-test="error"]`
 - **Error Close Button:** `[data-test="error-button"]`
 - **Accepted Usernames List:** `[data-test="login-credentials"]`
-- **Burger Menu / Logout:** `#react-burger-menu-btn` → `#logout_sidebar_link`
+- **Burger Menu Buttons:** open `#react-burger-menu-btn`, close `#react-burger-cross-btn`. Don't click `[data-test="open-menu"]` / `[data-test="close-menu"]`: those are the icon images, and the invisible button on top of them catches the click, so the click times out
+- **Burger Menu Panel:** `.bm-menu-wrap`. When closed it is moved off-screen, not hidden, so check it with `to_be_in_viewport()` instead of `to_be_visible()`
+- **Burger Menu Items:** `[data-test="inventory-sidebar-link"]` (All Items), `[data-test="dynamic-catalog-sidebar-link"]`, `[data-test="about-sidebar-link"]`, `[data-test="logout-sidebar-link"]` (also `#logout_sidebar_link`), `[data-test="reset-sidebar-link"]` (Reset App State); `[data-test$="-sidebar-link"]` matches all 5
+- **Dynamic Catalog Submenu:** `[data-test="dynamic-catalog-submenu"]` (only in the page while open), links `[data-test="dynamic-catalog-lazy-load-link"]`, `[data-test="dynamic-catalog-spinner-link"]`, `[data-test="dynamic-catalog-slider-link"]`
+- **Footer:** `[data-test="footer"]`, links `[data-test="social-x"]`, `[data-test="social-facebook"]`, `[data-test="social-linkedin"]`, copyright `[data-test="footer-copy"]`
 - **Products Page:** `.inventory_list`, title `[data-test="title"]`
 - **Cart Badge / Link:** `.shopping_cart_badge`, `.shopping_cart_link`
 - **Add / Remove (products page):** `[data-test="add-to-cart-<product>"]`, `[data-test="remove-<product>"]`, e.g. `add-to-cart-sauce-labs-backpack`
@@ -221,6 +226,26 @@ Once sync Playwright starts, it keeps its event loop marked as "running" until t
 | `test_broken_cart_buttons_on_detail_page[...]` | Negative | `problem_user` and `error_user` have the same broken buttons on the detail page as on the products page: Bolt T-Shirt can't be added and nothing can be removed |
 | `test_detail_page_survives_reload` | Edge case | Reloading a detail page keeps the product and the cart |
 
+### What the menu and footer tests cover
+`test_menu.py` is sync only. Tests log in as `standard_user` unless the table says otherwise. Logging out is already covered by the login tests, so it isn't repeated here:
+
+| Test | Type | What it checks |
+| --- | --- | --- |
+| `test_menu_items` | Positive | The menu starts closed and opens with All Items, Dynamic Catalog, About, Logout and Reset App State, in that order |
+| `test_close_menu[...]` | Positive | The ✕ button and the Escape key both close the menu |
+| `test_all_items_from_other_pages[...]` | Positive | All Items goes back to the products page from the cart, a product detail page, checkout step one and the checkout complete page, and keeps the cart |
+| `test_dynamic_catalog_submenu` | Positive | Dynamic Catalog opens a submenu with Lazy Load, Spinner and Slider, and a second click closes it |
+| `test_dynamic_catalog_links[...]` | Positive | Each submenu link opens its own Dynamic Catalog page |
+| `test_about_link` | Positive | About links to `https://saucelabs.com/` |
+| `test_problem_user_about_link_is_404` | Negative | For `problem_user`, About links to a 404 page |
+| `test_reset_app_state_empties_cart` | Positive | Reset App State hides the badge and empties the cart |
+| `test_reset_app_state_updates_buttons` | Negative (`xfail`) | Right after Reset App State the products page should show no Remove buttons, but saucedemo keeps showing them until the page re-renders. Marked as an expected failure; it turns red if the site ever fixes the bug |
+| `test_back_after_logout_is_blocked` | Negative | After logging out, the browser's Back button redirects to the login page with an error |
+| `test_footer_social_links[...]` | Positive | The X, Facebook and LinkedIn links point to Sauce Labs' pages and open in a new tab (`target="_blank"`) |
+| `test_social_link_opens_new_tab` | Positive | Clicking X opens a new tab and the products page stays put. x.com itself is replaced by a stub page with `page.context.route`, so the test doesn't depend on another site |
+| `test_footer_copyright` | Positive | The footer shows "© <year> Sauce Labs. All Rights Reserved. Terms of Service \| Privacy Policy" |
+| `test_copyright_year_follows_browser_clock` | Edge case | With the browser clock set to 2030 (`page.clock`), the footer says "© 2030", so the year isn't hard-coded |
+
 ## 🚀 4. Running the Tests
 
 To run the tests and see the results:
@@ -237,6 +262,7 @@ pytest test_cart_async.py     # async cart tests
 pytest test_checkout.py       # checkout tests (sync only)
 pytest test_sorting.py        # sorting tests (sync only)
 pytest test_product_detail.py # product detail tests (sync only)
+pytest test_menu.py           # burger menu + footer tests (sync only)
 
 # Run one test by name (in every file that has it)
 pytest -k test_valid_login
