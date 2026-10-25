@@ -1,0 +1,7 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Lets tests import pages/, data/ and config.py from the project root
+pythonpath = ["."]
+addopts = "-ra --strict-markers"
+# Matches the async fixtures in tests/conftest.py, which share one session-wide event loop
+asyncio_default_fixture_loop_scope = "session"
