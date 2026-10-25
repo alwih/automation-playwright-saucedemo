@@ -1,6 +1,6 @@
 # Playwright Python Starter Guide (SauceDemo)
 
-This project is a beginner-friendly introduction to UI automation using [Playwright](https://playwright.dev/python/) and [Miniconda](https://docs.anaconda.com/miniconda/). It tests login, cart, checkout, product sorting, the product detail page, and the burger menu + footer on `https://www.saucedemo.com`. The login and cart suites are written twice, once with Playwright's **sync** API and once with its **async** API, so you can compare them side by side. The checkout, sorting, product detail and menu suites use the sync API only.
+This project is a beginner-friendly introduction to UI automation using [Playwright](https://playwright.dev/python/) and [Miniconda](https://docs.anaconda.com/miniconda/). It tests login, cart, checkout, product sorting, the product detail page, the burger menu + footer, and the Dynamic Catalog pages on `https://www.saucedemo.com`. The login and cart suites are written twice, once with Playwright's **sync** API and once with its **async** API, so you can compare them side by side. The checkout, sorting, product detail, menu and Dynamic Catalog suites use the sync API only.
 
 ## 🛠️ 1. Setup Environment (Miniconda)
 
@@ -41,16 +41,17 @@ We use `conda` to manage a clean Python environment (Python 3.10+). Follow these
 
 ```text
 .
-├── conftest.py            # Shared constants, helpers (sync + async) and async fixtures
-├── test_login.py          # Login tests, sync API (step-by-step)
-├── test_login_async.py    # The same login tests, async API (+ a concurrent login test)
-├── test_cart.py           # Cart tests, sync API (positive, negative and edge cases)
-├── test_cart_async.py     # The same cart tests, async API
-├── test_checkout.py       # Checkout tests, sync API only
-├── test_sorting.py        # Product sorting tests, sync API only
-├── test_product_detail.py # Product detail page tests, sync API only
-├── test_menu.py           # Burger menu + footer tests, sync API only
-├── environment.yml        # Conda environment config (name, Python version, pip packages)
+├── conftest.py             # Shared constants, helpers (sync + async) and async fixtures
+├── test_login.py           # Login tests, sync API (step-by-step)
+├── test_login_async.py     # The same login tests, async API (+ a concurrent login test)
+├── test_cart.py            # Cart tests, sync API (positive, negative and edge cases)
+├── test_cart_async.py      # The same cart tests, async API
+├── test_checkout.py        # Checkout tests, sync API only
+├── test_sorting.py         # Product sorting tests, sync API only
+├── test_product_detail.py  # Product detail page tests, sync API only
+├── test_menu.py            # Burger menu + footer tests, sync API only
+├── test_dynamic_catalog.py # Dynamic Catalog pages (lazy load, spinner, slider), sync API only
+├── environment.yml         # Conda environment config (name, Python version, pip packages)
 └── .gitignore
 ```
 
@@ -71,7 +72,7 @@ pytest loads `conftest.py` automatically. It holds everything the test files sha
 Playwright offers two ways to write code: **Sync** and **Async**.
 
 ### Sync (Synchronous)
-Used in `test_login.py`, `test_cart.py`, `test_checkout.py`, `test_sorting.py`, `test_product_detail.py` and `test_menu.py`. The code waits for each line to finish before moving to the next.
+Used in `test_login.py`, `test_cart.py`, `test_checkout.py`, `test_sorting.py`, `test_product_detail.py`, `test_menu.py` and `test_dynamic_catalog.py`. The code waits for each line to finish before moving to the next.
 - Easy to read and debug for beginners.
 - No `await` keywords needed.
 
@@ -143,6 +144,10 @@ Once sync Playwright starts, it keeps its event loop marked as "running" until t
 - **Product Name / Price:** `[data-test="inventory-item-name"]`, `[data-test="inventory-item-price"]`
 - **Product Card Links:** `[data-test="item-<id>-title-link"]` (the name), `[data-test="item-<id>-img-link"]` (the image), e.g. `item-4-title-link` for the Backpack
 - **Product Detail Page:** scope `.inventory_details_container` (it reuses the products page's `inventory-item-name` / `-desc` / `-price` data-tests), image `.inventory_details_img`, buttons `[data-test="add-to-cart"]` / `[data-test="remove"]` (no product suffix), `[data-test="back-to-products"]`
+- **Dynamic Catalog Pages:** `/dynamic-catalog-<slug>.html` with slug `lazy-load`, `spinner` or `slider`, container `[data-test="dynamic-catalog-<slug>-container"]`. Every card has `[data-test="<prefix>-img"]` (its `alt` is the product name), `<prefix>-name` and `<prefix>-price`, where the prefix is `lazy-load-item-<n>`, `spinner-item-<id>` or `dynamic-catalog-slider-item`
+- **Lazy Load:** a card not loaded yet holds only `[data-test="lazy-load-item-<n>-placeholder"]` ("Loading…"); scrolling `[data-test="dynamic-catalog-lazy-load-sentinel"]` into view adds 6 more cards
+- **Spinner:** `[data-test="dynamic-catalog-spinner"]` (`role="status"`, `aria-label="Loading"`), then `[data-test="dynamic-catalog-spinner-grid"]`
+- **Slider:** card `[data-test="dynamic-catalog-slider-item"]`, dots `[data-test="dynamic-catalog-slider-dot-<n>"]` (the current one has `aria-current="true"`)
 
 ### What the login tests cover
 `test_login.py` and `test_login_async.py` contain the same cases (password for every user is `secret_sauce`):
@@ -246,6 +251,26 @@ Once sync Playwright starts, it keeps its event loop marked as "running" until t
 | `test_footer_copyright` | Positive | The footer shows "© <year> Sauce Labs. All Rights Reserved. Terms of Service \| Privacy Policy" |
 | `test_copyright_year_follows_browser_clock` | Edge case | With the browser clock set to 2030 (`page.clock`), the footer says "© 2030", so the year isn't hard-coded |
 
+### What the Dynamic Catalog tests cover
+`test_dynamic_catalog.py` is sync only. Tests log in as `standard_user` and open each page by URL; every user sees the same pages, so there are no user-specific tests. The spinner and slider run on timers, so their tests freeze the browser clock with `page.clock` and move it forward by hand with `page.clock.run_for(ms)` instead of waiting in real time. The Lazy Load counts assume the default 1280×720 browser window:
+
+| Test | Type | What it checks |
+| --- | --- | --- |
+| `test_lazy_load_first_screen` | Positive | The page opens with 12 cards: the 8 on screen are loaded and the 4 below them still say "Loading…" |
+| `test_placeholder_loads_when_scrolled_into_view` | Positive | A "Loading…" card shows its product once it is scrolled on screen |
+| `test_sentinel_loads_more_cards` | Positive | Each scroll to the bottom of the list adds 6 more cards (12 → 18 → 24) |
+| `test_lazy_load_list_repeats` | Edge case | The list repeats after 22 cards (card 22 is the same as card 0), so it never runs out |
+| `test_lazy_load_no_duplicate_products` | Negative (`xfail`) | One pass through the list shouldn't show the same product twice, but saucedemo lists "Test.allTheThings() T-Shirt (Red) (L)" twice. Marked as an expected failure; it turns red if the site ever fixes the bug |
+| `test_lazy_load_resets_after_reload` | Edge case | Reloading brings back the first screen of 12 cards |
+| `test_spinner_then_products` | Positive | A loading spinner shows first, then a grid of the 6 products replaces it |
+| `test_spinner_wait_bounds` | Edge case | The spinner is still there at 499 ms and gone by 3 s (the site picks a random wait in between) |
+| `test_slider_starts_on_first_product` | Positive | The slider has one dot per product and starts on the Bike Light |
+| `test_slider_cycles_through_products` | Positive | Every 2 seconds the slider moves to the next product, and after the last one it starts over |
+| `test_slider_waits_two_seconds` | Edge case | The slide changes at exactly 2 seconds, not before |
+| `test_slider_dot_shows_product[...]` | Positive | Clicking a dot shows its product |
+| `test_slider_dot_click_keeps_timer` | Edge case | Clicking a dot doesn't restart the 2-second timer, so the next slide can come sooner than 2 seconds after the click |
+| `test_dynamic_catalog_requires_login[...]` | Negative | Opening a Dynamic Catalog page without logging in redirects back with an error |
+
 ## 🚀 4. Running the Tests
 
 To run the tests and see the results:
@@ -255,18 +280,19 @@ To run the tests and see the results:
 pytest
 
 # Run a specific file
-pytest test_login.py          # sync login tests
-pytest test_login_async.py    # async login tests
-pytest test_cart.py           # sync cart tests
-pytest test_cart_async.py     # async cart tests
-pytest test_checkout.py       # checkout tests (sync only)
-pytest test_sorting.py        # sorting tests (sync only)
-pytest test_product_detail.py # product detail tests (sync only)
-pytest test_menu.py           # burger menu + footer tests (sync only)
+pytest test_login.py           # sync login tests
+pytest test_login_async.py     # async login tests
+pytest test_cart.py            # sync cart tests
+pytest test_cart_async.py      # async cart tests
+pytest test_checkout.py        # checkout tests (sync only)
+pytest test_sorting.py         # sorting tests (sync only)
+pytest test_product_detail.py  # product detail tests (sync only)
+pytest test_menu.py            # burger menu + footer tests (sync only)
+pytest test_dynamic_catalog.py # Dynamic Catalog tests (sync only)
 
 # Run one test by name (in every file that has it)
 pytest -k test_valid_login
-pytest -k test_add_to_cart    # also matches test_add_to_cart_from_product_page
+pytest -k test_add_to_cart     # also matches test_add_to_cart_from_product_page
 
 # Show each test name and its result
 pytest -v
