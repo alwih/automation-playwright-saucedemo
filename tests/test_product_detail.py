@@ -1,28 +1,19 @@
 import pytest
 from playwright.sync_api import Page, expect
+from config import BASE_URL
 from conftest import (
-    BASE_URL,
     expect_inventory_page,
     get_error_message,
     login_to_saucedemo,
 )
+from data.products import BACKPACK, FLEECE_JACKET, PRODUCTS, Product
+from data.users import BROKEN_CART_USERS
 
 ITEM_URL = f"{BASE_URL}/inventory-item.html"
 # The detail page reuses the products page's data-test names, so every read is scoped to this container
 DETAILS = ".inventory_details_container"
 DETAIL_NAME = f"{DETAILS} [data-test='inventory-item-name']"
 NOT_FOUND_NAME = "ITEM NOT FOUND"
-# Product name -> id in its detail page URL (taken from the cards' item-<id>-title-link)
-PRODUCT_IDS = {
-    "Sauce Labs Backpack": 4,
-    "Sauce Labs Bike Light": 0,
-    "Sauce Labs Bolt T-Shirt": 1,
-    "Sauce Labs Fleece Jacket": 5,
-    "Sauce Labs Onesie": 2,
-    "Test.allTheThings() T-Shirt (Red)": 3,
-}
-# Users whose cart buttons are broken on purpose
-BROKEN_CART_USERS = ["problem_user", "error_user"]
 
 def get_product_card(page: Page, name: str):
     """Locator for one product's card on the products page"""
@@ -40,18 +31,18 @@ def expect_product_page(page: Page, product_id: int, name: str):
     expect(page).to_have_url(f"{ITEM_URL}?id={product_id}")
     expect(page.locator(DETAIL_NAME)).to_have_text(name)
 
-@pytest.mark.parametrize("name, product_id", PRODUCT_IDS.items())
-def test_detail_matches_inventory_card(page: Page, name: str, product_id: int):
+@pytest.mark.parametrize("product", PRODUCTS, ids=lambda product: product.slug)
+def test_detail_matches_inventory_card(page: Page, product: Product):
     # Positive: the detail page shows the same description, price and image as the product's card
     login_to_saucedemo(page)
-    card = get_product_card(page, name)
+    card = get_product_card(page, product.name)
     description = card.locator("[data-test='inventory-item-desc']").inner_text()
     price = card.locator("[data-test='inventory-item-price']").inner_text()
     image = card.locator("img").get_attribute("src")
 
     card.locator("[data-test='inventory-item-name']").click()
 
-    expect_product_page(page, product_id, name)
+    expect_product_page(page, product.id, product.name)
     details = page.locator(DETAILS)
     expect(details.locator("[data-test='inventory-item-desc']")).to_have_text(description)
     expect(details.locator("[data-test='inventory-item-price']")).to_have_text(price)
@@ -127,20 +118,20 @@ def test_product_detail_requires_login(page: Page):
     )
 
 @pytest.mark.parametrize(
-    "name, opened_name",
+    "product, opened_name",
     [
-        ("Sauce Labs Backpack", "Sauce Labs Fleece Jacket"),
-        ("Sauce Labs Fleece Jacket", NOT_FOUND_NAME),
+        (BACKPACK, FLEECE_JACKET.name),
+        (FLEECE_JACKET, NOT_FOUND_NAME),
     ],
     ids=["backpack", "fleece_jacket"],
 )
-def test_problem_user_opens_wrong_product(page: Page, name: str, opened_name: str):
+def test_problem_user_opens_wrong_product(page: Page, product: Product, opened_name: str):
     # Negative: for problem_user, every product links to the next id, so another page opens
     login_to_saucedemo(page, username="problem_user")
 
-    get_product_card(page, name).locator("[data-test='inventory-item-name']").click()
+    get_product_card(page, product.name).locator("[data-test='inventory-item-name']").click()
 
-    expect_product_page(page, PRODUCT_IDS[name] + 1, opened_name)
+    expect_product_page(page, product.id + 1, opened_name)
 
 @pytest.mark.parametrize("username", BROKEN_CART_USERS)
 def test_broken_cart_buttons_on_detail_page(page: Page, username: str):

@@ -1,22 +1,22 @@
 import pytest
 from playwright.async_api import Page, expect
+from config import BASE_URL
 from conftest import (
-    BASE_URL,
     INVENTORY_URL,
     get_error_message,
     login_to_saucedemo_async,
     logout_from_saucedemo_async,
 )
+from data.products import BOLT_T_SHIRT, FLEECE_JACKET, RED_T_SHIRT
+from data.users import BROKEN_CART_USERS
 
 # Async mirror of test_cart.py: same cases, written with the async API (`async def` + `await`)
 
 # Every test in this file runs on the session-wide event loop shared with the async fixtures
 pytestmark = pytest.mark.asyncio(loop_scope="session")
 
-# Users whose cart buttons are broken on purpose
-BROKEN_CART_USERS = ["problem_user", "error_user"]
-# Products these users can't add to the cart
-BROKEN_ADD_PRODUCTS = ["sauce-labs-bolt-t-shirt", "sauce-labs-fleece-jacket", "test.allthethings()-t-shirt-(red)"]
+# Products the BROKEN_CART_USERS can't add to the cart
+BROKEN_ADD_PRODUCTS = [BOLT_T_SHIRT, FLEECE_JACKET, RED_T_SHIRT]
 
 async def test_add_to_cart(async_page: Page):
     await login_to_saucedemo_async(async_page)
@@ -110,7 +110,7 @@ async def test_broken_add_to_cart_buttons(async_page: Page, username: str):
     await login_to_saucedemo_async(async_page, username=username)
 
     for product in BROKEN_ADD_PRODUCTS:
-        add_button = async_page.locator(f"button[data-test='add-to-cart-{product}']")
+        add_button = async_page.locator(f"button[data-test='add-to-cart-{product.slug}']")
         await add_button.click()
         await expect(add_button).to_be_visible()
     cart_badge = async_page.locator(".shopping_cart_badge")
