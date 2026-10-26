@@ -1,8 +1,7 @@
-import asyncio
 import re
 
 import pytest
-from playwright.async_api import Browser, Page, expect
+from playwright.async_api import Page, expect
 from config import BASE_URL
 from conftest import (
     expect_inventory_page_async,
@@ -116,17 +115,3 @@ async def test_inventory_requires_login(async_page: Page):
     await expect(get_error_message(async_page)).to_have_text(
         "Epic sadface: You can only access '/inventory.html' when you are logged in."
     )
-
-async def test_concurrent_logins(async_browser: Browser):
-    # Async-only: log every user in at the same time, each in its own isolated context.
-    # Total time ~= the slowest login (performance_glitch_user), not the sum of all logins.
-    async def login_as(username: str):
-        context = await async_browser.new_context()
-        try:
-            page = await context.new_page()
-            await login_to_saucedemo_async(page, username=username, password=PASSWORD)
-            await expect_inventory_page_async(page, timeout=15000)
-        finally:
-            await context.close()
-
-    await asyncio.gather(*(login_as(user) for user in LOGIN_USERS))

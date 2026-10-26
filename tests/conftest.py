@@ -44,6 +44,8 @@ def pytest_collection_modifyitems(items):
 async def async_browser(browser_name: str, browser_type_launch_args: dict):
     """One browser for the whole run; honours --browser, --headed and --slowmo like the sync fixtures"""
     async with async_playwright() as playwright:
+        # get_by_test_id("x") matches data-test="x", the attribute SauceDemo uses
+        playwright.selectors.set_test_id_attribute("data-test")
         browser = await getattr(playwright, browser_name).launch(**browser_type_launch_args)
         yield browser
         await browser.close()
