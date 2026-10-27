@@ -1,6 +1,6 @@
 # Playwright Python Starter Guide (SauceDemo)
 
-This project is a beginner-friendly introduction to UI automation using [Playwright](https://playwright.dev/python/) and [Miniconda](https://docs.anaconda.com/miniconda/). It tests login, cart, checkout, product sorting, the product detail page, the burger menu + footer, and the Dynamic Catalog pages on `https://www.saucedemo.com`. The login and cart suites are written twice, once with Playwright's **sync** API and once with its **async** API, so you can compare them side by side. The checkout, sorting, product detail, menu and Dynamic Catalog suites use the sync API only.
+This project is a beginner-friendly introduction to UI automation using [Playwright](https://playwright.dev/python/) and [Miniconda](https://docs.anaconda.com/miniconda/). It tests login, cart, checkout, product sorting, the product detail page, the burger menu + footer, and the Dynamic Catalog pages on `https://www.saucedemo.com`. Every suite uses Playwright's **sync** API, except `test_concurrency_async.py`, which uses the **async** API to drive several browser sessions at once (see [Sync by default, async only for concurrency](#sync-by-default-async-only-for-concurrency)).
 
 ## 🛠️ 1. Setup Environment (Miniconda)
 
@@ -42,16 +42,15 @@ We use `conda` to manage a clean Python environment (Python 3.11). Follow these 
 ```text
 .
 ├── tests/
-│   ├── conftest.py             # Shared helpers (sync + async) and async fixtures
-│   ├── test_login.py           # Login tests, sync API (step-by-step)
-│   ├── test_login_async.py     # The same login tests, async API (+ a concurrent login test)
-│   ├── test_cart.py            # Cart tests, sync API (positive, negative and edge cases)
-│   ├── test_cart_async.py      # The same cart tests, async API
-│   ├── test_checkout.py        # Checkout tests, sync API only
-│   ├── test_sorting.py         # Product sorting tests, sync API only
-│   ├── test_product_detail.py  # Product detail page tests, sync API only
-│   ├── test_menu.py            # Burger menu + footer tests, sync API only
-│   └── test_dynamic_catalog.py # Dynamic Catalog pages (lazy load, spinner, slider), sync API only
+│   ├── conftest.py             # Shared sync helpers and the async browser fixture
+│   ├── test_login.py           # Login tests (step-by-step)
+│   ├── test_cart.py            # Cart tests (positive, negative and edge cases)
+│   ├── test_checkout.py        # Checkout tests
+│   ├── test_sorting.py         # Product sorting tests
+│   ├── test_product_detail.py  # Product detail page tests
+│   ├── test_menu.py            # Burger menu + footer tests
+│   ├── test_dynamic_catalog.py # Dynamic Catalog pages (lazy load, spinner, slider)
+│   └── test_concurrency_async.py # Async API: several browser sessions at once in one test
 ├── data/
 │   ├── users.py                # Password, the accepted users and the users with broken cart buttons
 │   └── products.py             # The 6 products (id, name, cart-button slug, price)
@@ -65,50 +64,35 @@ We use `conda` to manage a clean Python environment (Python 3.11). Follow these 
 ### `conftest.py`, the shared toolbox
 pytest loads `tests/conftest.py` automatically. It holds the helpers the test files share. Test data lives in `data/` and the site URL in `config.py`:
 
-| Name | Sync version | Async version |
-| --- | --- | --- |
-| Constants | `BASE_URL` (`config.py`), `INVENTORY_URL`, `PASSWORD` / `ACCEPTED_USERS` / `LOGIN_USERS` / `BROKEN_CART_USERS` (`data/users.py`), `Product` + `PRODUCTS` (`data/products.py`) | (shared) |
-| Log in | `login_to_saucedemo(page, ...)` | `await login_to_saucedemo_async(page, ...)` |
-| Log out (burger menu) | `logout_from_saucedemo(page)` | `await logout_from_saucedemo_async(page)` |
-| Error banner locator | `get_error_message(page)` | `get_error_message(page)` (same function, see below) |
-| Assert on Products page | `expect_inventory_page(page, timeout)` | `await expect_inventory_page_async(page, timeout)` |
-| Browser / page fixtures | `page` (from pytest-playwright) | `async_browser`, `async_page` (defined in `conftest.py`) |
+| What | Name |
+| --- | --- |
+| Constants | `BASE_URL` (`config.py`), `INVENTORY_URL`, `PASSWORD` / `ACCEPTED_USERS` / `LOGIN_USERS` / `BROKEN_CART_USERS` (`data/users.py`), `Product` + `PRODUCTS` (`data/products.py`) |
+| Log in | `login_to_saucedemo(page, ...)` |
+| Log out (burger menu) | `logout_from_saucedemo(page)` |
+| Error banner locator | `get_error_message(page)` |
+| Assert on Products page | `expect_inventory_page(page, timeout)` |
+| Browser / page fixtures | `page` (from pytest-playwright); `async_browser` for the concurrency tests (defined in `conftest.py`) |
+
+The async helpers (`login`, `expect_inventory_page`, `new_session`) live in `test_concurrency_async.py`, the only file that uses them.
 
 ## 🧪 3. Understanding the Code
 
-Playwright offers two ways to write code: **Sync** and **Async**.
+### Sync by default, async only for concurrency
+Playwright has a **sync** API and an **async** API. Every test file uses the sync one, except `test_concurrency_async.py`:
+- **Async doesn't make pytest faster.** pytest runs `async def` tests one at a time, just like sync ones. To speed up the suite, run tests in parallel with `-n` (pytest-xdist).
+- **A second copy costs double the upkeep.** An async copy of a sync suite checks nothing new, but every change has to be made twice.
+- **Async pays off inside one test that drives several browser sessions at the same time.** That is what `test_concurrency_async.py` does with `asyncio.gather`. For example, `test_concurrent_logins` logs in all 5 working users at once, each in its own session, so it takes about as long as the slowest login (`performance_glitch_user`, ~5s) instead of the sum of all five:
 
-### Sync (Synchronous)
-Used in `test_login.py`, `test_cart.py`, `test_checkout.py`, `test_sorting.py`, `test_product_detail.py`, `test_menu.py` and `test_dynamic_catalog.py`. The code waits for each line to finish before moving to the next.
-- Easy to read and debug for beginners.
-- No `await` keywords needed.
-
-### Async (Asynchronous)
-Used in `test_login_async.py` and `test_cart_async.py`. While waiting for the browser, the code pauses and lets other async work run.
-- Needed if you want to drive several browsers/pages at the same time in one test, or integrate with async apps.
-- Uses `async def` and `await`.
-
-### Sync vs Async side by side
-
-| | Sync (`test_login.py`) | Async (`test_login_async.py`) |
-| --- | --- | --- |
-| Import | `from playwright.sync_api import Page, expect` | `from playwright.async_api import Page, expect` |
-| Fixture | `page` | `async_page` |
-| Test function | `def test_valid_login(page):` | `async def test_valid_login(async_page):` |
-| Navigate / click / fill | `page.goto(url)` | `await async_page.goto(url)` |
-| Assertion | `expect(locator).to_be_visible()` | `await expect(locator).to_be_visible()` |
-| Get all matches | `for image in images.all():` | `for image in await images.all():` |
-| Build a locator | `page.locator("css")` | `async_page.locator("css")` (**no** `await`) |
-
-Rule of thumb: anything that talks to the browser (actions, assertions, `.all()`) is awaited. Building a locator does not talk to the browser, so it is never awaited. That's why `get_error_message()` works for both sync and async pages.
+```python
+await asyncio.gather(*(login_user(user) for user in LOGIN_USERS))
+```
 
 ### How the async tests are wired up
-pytest-playwright's built-in `page` fixture only supports the sync API, so `conftest.py` defines two async fixtures with **pytest-asyncio**:
+pytest-playwright's built-in fixtures only support the sync API, so `conftest.py` defines **`async_browser`** with **pytest-asyncio**. It starts Playwright and launches **one** browser for the whole run, and it reuses pytest-playwright's options, so `--browser`, `--headed` and `--slowmo` work for async tests too. It also sets `data-test` as the test id attribute, so the async tests find elements with `page.get_by_test_id("...")`.
 
-- **`async_browser`** (session scope): starts Playwright and launches **one** browser for the whole run. It reuses pytest-playwright's options, so `--browser`, `--headed` and `--slowmo` work for async tests too.
-- **`async_page`** (function scope): opens a fresh browser context + page for **each** test, so cookies and storage never leak between tests (same isolation as the sync `page`).
+Each test opens its sessions from that browser with `new_session()`, a fresh context + page, so every session has its own cookies and localStorage, like a separate browser.
 
-Both fixtures, and every test in `test_login_async.py` and `test_cart_async.py`, share one session-wide event loop (each async file sets this at the top):
+The fixture and every test in the file share one session-wide event loop (set at the top of the file):
 
 ```python
 pytestmark = pytest.mark.asyncio(loop_scope="session")
@@ -116,17 +100,8 @@ pytestmark = pytest.mark.asyncio(loop_scope="session")
 
 Without this, each test would get its own event loop and couldn't use the shared browser.
 
-### Concurrency: what async actually buys you
-pytest still runs async tests **one at a time**. Marking a test `async` does not make the suite faster by itself (use `-n` for that). The speed-up shows up **inside** a test, where you can run several things at once with `asyncio.gather`. `test_concurrent_logins` logs in all 5 working users at the same time, each in its own isolated context:
-
-```python
-await asyncio.gather(*(login_as(user) for user in LOGIN_USERS))
-```
-
-It takes about as long as the slowest login (`performance_glitch_user`, ~5s) instead of the sum of all five.
-
 ### Running sync and async tests in the same run
-Once sync Playwright starts, it keeps its event loop marked as "running" until the pytest session ends, and any async test that runs after it fails. To avoid this, a hook in `conftest.py` (`pytest_collection_modifyitems`) moves **async tests to the front** of the run. That's why `test_login_async.py` and `test_cart_async.py` run before the sync files when you call plain `pytest`. This also works with `pytest -n`.
+Once sync Playwright starts, it keeps its event loop marked as "running" until the pytest session ends, and any async test that runs after it fails. To avoid this, a hook in `conftest.py` (`pytest_collection_modifyitems`) moves **async tests to the front** of the run. That's why `test_concurrency_async.py` runs before the sync files when you call plain `pytest`. This also works with `pytest -n`.
 
 ### Key Selectors for SauceDemo:
 - **Username:** `input#user-name`
@@ -157,7 +132,7 @@ Once sync Playwright starts, it keeps its event loop marked as "running" until t
 - **Slider:** card `[data-test="dynamic-catalog-slider-item"]`, dots `[data-test="dynamic-catalog-slider-dot-<n>"]` (the current one has `aria-current="true"`)
 
 ### What the login tests cover
-`test_login.py` and `test_login_async.py` contain the same cases (password for every user is `secret_sauce`):
+`test_login.py` (password for every user is `secret_sauce`):
 
 | Test | What it checks |
 | --- | --- |
@@ -172,10 +147,9 @@ Once sync Playwright starts, it keeps its event loop marked as "running" until t
 | `test_invalid_login[...]` | Empty fields, wrong password, unknown user, case-sensitive username → correct error text |
 | `test_close_error_message` | The ✕ button hides the error banner |
 | `test_inventory_requires_login` | Opening `/inventory.html` without logging in redirects back with an error |
-| `test_concurrent_logins` *(async only)* | All 5 working users log in at the same time |
 
 ### What the cart tests cover
-`test_cart.py` and `test_cart_async.py` contain the same cases. Tests log in as `standard_user` unless the table says otherwise:
+`test_cart.py`. Tests log in as `standard_user` unless the table says otherwise:
 
 | Test | Type | What it checks |
 | --- | --- | --- |
@@ -278,6 +252,15 @@ Once sync Playwright starts, it keeps its event loop marked as "running" until t
 | `test_slider_dot_click_keeps_timer` | Edge case | Clicking a dot doesn't restart the 2-second timer, so the next slide can come sooner than 2 seconds after the click |
 | `test_dynamic_catalog_requires_login[...]` | Negative | Opening a Dynamic Catalog page without logging in redirects back with an error |
 
+### What the concurrency tests cover
+`test_concurrency_async.py` is the only async file. Each test opens several browser sessions and drives them at the same time:
+
+| Test | Type | What it checks |
+| --- | --- | --- |
+| `test_concurrent_logins` | Positive | All 5 users who can log in do so at the same time, each in their own session |
+| `test_same_user_has_separate_carts_per_browser` | Edge case | `standard_user` is logged in on two browsers at once: one adds the Backpack, the other the Bike Light, and each cart lists only its own item. The cart belongs to the browser (localStorage), not the account |
+| `test_concurrent_checkouts` | Positive | `standard_user`, `performance_glitch_user` and `visual_user` check out at the same time and each reaches "Thank you for your order!" (`problem_user` and `error_user` can't finish checkout; see the checkout tests) |
+
 ## 🚀 4. Running the Tests
 
 To run the tests and see the results:
@@ -287,17 +270,16 @@ To run the tests and see the results:
 pytest
 
 # Run a specific file
-pytest tests/test_login.py           # sync login tests
-pytest tests/test_login_async.py     # async login tests
-pytest tests/test_cart.py            # sync cart tests
-pytest tests/test_cart_async.py      # async cart tests
-pytest tests/test_checkout.py        # checkout tests (sync only)
-pytest tests/test_sorting.py         # sorting tests (sync only)
-pytest tests/test_product_detail.py  # product detail tests (sync only)
-pytest tests/test_menu.py            # burger menu + footer tests (sync only)
-pytest tests/test_dynamic_catalog.py # Dynamic Catalog tests (sync only)
+pytest tests/test_login.py             # login tests
+pytest tests/test_cart.py              # cart tests
+pytest tests/test_checkout.py          # checkout tests
+pytest tests/test_sorting.py           # sorting tests
+pytest tests/test_product_detail.py    # product detail tests
+pytest tests/test_menu.py              # burger menu + footer tests
+pytest tests/test_dynamic_catalog.py   # Dynamic Catalog tests
+pytest tests/test_concurrency_async.py # concurrency tests (async)
 
-# Run one test by name (in every file that has it)
+# Run tests by name (-k matches part of the name)
 pytest -k test_valid_login
 pytest -k test_add_to_cart     # also matches test_add_to_cart_from_product_page
 
@@ -305,7 +287,7 @@ pytest -k test_add_to_cart     # also matches test_add_to_cart_from_product_page
 pytest -v
 
 # Run tests in parallel (2 workers)
-pytest -n 2 tests/test_login.py tests/test_login_async.py
+pytest -n 2
 
 # Run with browser visible (headed mode)
 pytest --headed
