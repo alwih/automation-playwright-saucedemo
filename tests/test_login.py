@@ -1,77 +1,69 @@
 import re
 
 import pytest
-from playwright.sync_api import Page, expect
-from config import BASE_URL
-from conftest import (
-    expect_inventory_page,
-    get_error_message,
-    login_to_saucedemo,
-    logout_from_saucedemo,
-)
+from playwright.sync_api import expect
 from data.users import ACCEPTED_USERS, LOGIN_USERS, PASSWORD
+from pages.components import Menu
+from pages.inventory_page import InventoryPage
+from pages.login_page import LoginPage
 
-def test_accepted_users_listed_on_login_page(page: Page):
+def test_accepted_users_listed_on_login_page(login_page: LoginPage):
     # Fails if SauceDemo adds/removes a user, so this suite stays in sync
-    page.goto(BASE_URL)
+    login_page.open()
 
-    credentials = page.locator("[data-test='login-credentials']")
     for user in ACCEPTED_USERS:
-        expect(credentials).to_contain_text(user)
+        expect(login_page.credentials).to_contain_text(user)
 
-def test_valid_login(page: Page):
-    login_to_saucedemo(page, username="standard_user", password=PASSWORD)
+def test_valid_login(login_page: LoginPage, inventory_page: InventoryPage):
+    login_page.login("standard_user")
 
-    expect_inventory_page(page)
+    inventory_page.expect_loaded()
 
-def test_locked_out_user(page: Page):
-    login_to_saucedemo(page, username="locked_out_user", password=PASSWORD)
+def test_locked_out_user(login_page: LoginPage):
+    login_page.login("locked_out_user")
 
-    error_message = get_error_message(page)
-    expect(error_message).to_be_visible()
-    expect(error_message).to_contain_text("Epic sadface: Sorry, this user has been locked out.")
-    expect(page).to_have_url(f"{BASE_URL}/")
+    expect(login_page.error).to_be_visible()
+    expect(login_page.error).to_contain_text("Epic sadface: Sorry, this user has been locked out.")
+    login_page.expect_loaded()
 
-def test_problem_user(page: Page):
-    login_to_saucedemo(page, username="problem_user", password=PASSWORD)
+def test_problem_user(login_page: LoginPage, inventory_page: InventoryPage):
+    login_page.login("problem_user")
 
-    expect_inventory_page(page)
+    inventory_page.expect_loaded()
 
     # problem_user sees the same broken "sl-404" image for every product
-    images = page.locator(".inventory_item img")
-    expect(images).to_have_count(6)
-    for image in images.all():
+    expect(inventory_page.images).to_have_count(6)
+    for image in inventory_page.images.all():
         expect(image).to_have_attribute("src", re.compile(r"sl-404"))
 
-def test_performance_glitch_user(page: Page):
-    login_to_saucedemo(page, username="performance_glitch_user", password=PASSWORD)
+def test_performance_glitch_user(login_page: LoginPage, inventory_page: InventoryPage):
+    login_page.login("performance_glitch_user")
 
     # Login is delayed ~5s, longer than the default 5s expect timeout
-    expect_inventory_page(page, timeout=15000)
+    inventory_page.expect_loaded(timeout=15000)
 
-def test_error_user(page: Page):
+def test_error_user(login_page: LoginPage, inventory_page: InventoryPage):
     # error_user logs in normally; its bugs appear later in cart/checkout
-    login_to_saucedemo(page, username="error_user", password=PASSWORD)
+    login_page.login("error_user")
 
-    expect_inventory_page(page)
+    inventory_page.expect_loaded()
 
-def test_visual_user(page: Page):
-    login_to_saucedemo(page, username="visual_user", password=PASSWORD)
+def test_visual_user(login_page: LoginPage, inventory_page: InventoryPage):
+    login_page.login("visual_user")
 
-    expect_inventory_page(page)
+    inventory_page.expect_loaded()
 
     # visual_user gets a misplaced cart icon
-    expect(page.locator(".shopping_cart_container")).to_have_class(re.compile(r"visual_failure"))
+    expect(inventory_page.cart_container).to_have_class(re.compile(r"visual_failure"))
 
 @pytest.mark.parametrize("username", LOGIN_USERS)
-def test_login_then_logout(page: Page, username: str):
-    login_to_saucedemo(page, username=username, password=PASSWORD)
-    expect_inventory_page(page, timeout=15000)
+def test_login_then_logout(login_page: LoginPage, inventory_page: InventoryPage, menu: Menu, username: str):
+    login_page.login(username)
+    inventory_page.expect_loaded(timeout=15000)
 
-    logout_from_saucedemo(page)
+    menu.logout()
 
-    expect(page).to_have_url(f"{BASE_URL}/")
-    expect(page.locator("input#login-button")).to_be_visible()
+    login_page.expect_loaded()
 
 @pytest.mark.parametrize(
     "username, password, expected_error",
@@ -85,28 +77,23 @@ def test_login_then_logout(page: Page, username: str):
     ],
     ids=["empty_both", "empty_username", "empty_password", "wrong_password", "unknown_user", "username_case_sensitive"],
 )
-def test_invalid_login(page: Page, username: str, password: str, expected_error: str):
-    login_to_saucedemo(page, username=username, password=password)
+def test_invalid_login(login_page: LoginPage, username: str, password: str, expected_error: str):
+    login_page.login(username, password)
 
-    error_message = get_error_message(page)
-    expect(error_message).to_be_visible()
-    expect(error_message).to_have_text(expected_error)
-    expect(page).to_have_url(f"{BASE_URL}/")
+    expect(login_page.error).to_be_visible()
+    expect(login_page.error).to_have_text(expected_error)
+    login_page.expect_loaded()
 
-def test_close_error_message(page: Page):
-    login_to_saucedemo(page, username="locked_out_user", password=PASSWORD)
+def test_close_error_message(login_page: LoginPage):
+    login_page.login("locked_out_user")
 
-    error_message = get_error_message(page)
-    expect(error_message).to_be_visible()
+    expect(login_page.error).to_be_visible()
 
-    page.click("[data-test='error-button']")
+    login_page.close_error()
 
-    expect(error_message).to_be_hidden()
+    expect(login_page.error).to_be_hidden()
 
-def test_inventory_requires_login(page: Page):
-    page.goto(f"{BASE_URL}/inventory.html")
+def test_inventory_requires_login(login_page: LoginPage, inventory_page: InventoryPage):
+    inventory_page.open()
 
-    expect(page).to_have_url(f"{BASE_URL}/")
-    expect(get_error_message(page)).to_have_text(
-        "Epic sadface: You can only access '/inventory.html' when you are logged in."
-    )
+    login_page.expect_access_denied("/inventory.html")

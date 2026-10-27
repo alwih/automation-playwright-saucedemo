@@ -1,199 +1,181 @@
 import pytest
-from playwright.sync_api import Page, expect
-from config import BASE_URL
-from conftest import (
-    INVENTORY_URL,
-    get_error_message,
-    login_to_saucedemo,
-    logout_from_saucedemo,
-)
-from data.products import BOLT_T_SHIRT, FLEECE_JACKET, RED_T_SHIRT
+from playwright.sync_api import expect
+from data.products import BACKPACK, BIKE_LIGHT, BOLT_T_SHIRT, FLEECE_JACKET, RED_T_SHIRT
 from data.users import BROKEN_CART_USERS
+from pages.cart_page import CartPage
+from pages.checkout_pages import CheckoutInfoPage
+from pages.components import Menu
+from pages.inventory_page import InventoryPage
+from pages.login_page import LoginPage
+from pages.product_page import ProductPage
 
 # Products the BROKEN_CART_USERS can't add to the cart
 BROKEN_ADD_PRODUCTS = [BOLT_T_SHIRT, FLEECE_JACKET, RED_T_SHIRT]
 
-def test_add_to_cart(page: Page):
-    login_to_saucedemo(page)
+def test_add_to_cart(login_page: LoginPage, inventory_page: InventoryPage, cart_page: CartPage):
+    # Positive: an item added on the products page shows on the badge and in the cart
+    login_page.login()
 
-    # Selector for the first "Add to cart" button
-    page.click("button[data-test='add-to-cart-sauce-labs-backpack']")
+    inventory_page.add_to_cart(BACKPACK)
+    expect(inventory_page.cart_badge).to_have_text("1")
 
-    # Verify cart badge update
-    cart_badge = page.locator(".shopping_cart_badge")
-    expect(cart_badge).to_have_text("1")
+    inventory_page.open_cart()
+    cart_page.expect_loaded()
+    expect(cart_page.item_names).to_have_text(BACKPACK.name)
 
-    # Navigate to cart and verify item is there
-    page.click(".shopping_cart_link")
-    expect(page).to_have_url("https://www.saucedemo.com/cart.html")
-    # Scope to .cart_item: the inventory list is still in the DOM for a moment after the URL changes
-    expect(page.locator(".cart_item .inventory_item_name")).to_have_text("Sauce Labs Backpack")
-
-def test_add_to_cart_from_product_page(page: Page):
+def test_add_to_cart_from_product_page(
+    login_page: LoginPage, inventory_page: InventoryPage, product_page: ProductPage, cart_page: CartPage
+):
     # Positive: add an item from its own product page instead of the products list
-    login_to_saucedemo(page)
+    login_page.login()
 
-    page.click("text=Sauce Labs Bike Light")
-    expect(page).to_have_url(f"{BASE_URL}/inventory-item.html?id=0")
+    inventory_page.card(BIKE_LIGHT).name.click()
+    product_page.expect_product(BIKE_LIGHT.id, BIKE_LIGHT.name)
 
-    page.click("button[data-test='add-to-cart']")
-    expect(page.locator("button[data-test='remove']")).to_be_visible()
-    expect(page.locator(".shopping_cart_badge")).to_have_text("1")
+    product_page.add_to_cart()
+    expect(product_page.remove_button).to_be_visible()
+    expect(product_page.cart_badge).to_have_text("1")
 
-    page.click(".shopping_cart_link")
-    expect(page.locator(".cart_item .inventory_item_name")).to_have_text("Sauce Labs Bike Light")
+    product_page.open_cart()
+    expect(cart_page.item_names).to_have_text(BIKE_LIGHT.name)
 
-def test_remove_item_from_products_page(page: Page):
+def test_remove_item_from_products_page(login_page: LoginPage, inventory_page: InventoryPage, cart_page: CartPage):
     # Positive: the Remove button on the products page takes the item out of the cart
-    login_to_saucedemo(page)
+    login_page.login()
 
-    page.click("button[data-test='add-to-cart-sauce-labs-backpack']")
-    page.click("button[data-test='add-to-cart-sauce-labs-bike-light']")
-    cart_badge = page.locator(".shopping_cart_badge")
-    expect(cart_badge).to_have_text("2")
+    inventory_page.add_to_cart(BACKPACK)
+    inventory_page.add_to_cart(BIKE_LIGHT)
+    expect(inventory_page.cart_badge).to_have_text("2")
 
-    page.click("button[data-test='remove-sauce-labs-backpack']")
-    expect(cart_badge).to_have_text("1")
-    expect(page.locator("button[data-test='add-to-cart-sauce-labs-backpack']")).to_be_visible()
+    inventory_page.remove(BACKPACK)
+    expect(inventory_page.cart_badge).to_have_text("1")
+    expect(inventory_page.add_button(BACKPACK)).to_be_visible()
 
-    page.click(".shopping_cart_link")
-    expect(page.locator(".cart_item .inventory_item_name")).to_have_text("Sauce Labs Bike Light")
+    inventory_page.open_cart()
+    expect(cart_page.item_names).to_have_text(BIKE_LIGHT.name)
 
-def test_cart_shows_item_details(page: Page):
+def test_cart_shows_item_details(login_page: LoginPage, inventory_page: InventoryPage, cart_page: CartPage):
     # Positive: the cart row shows quantity, name and the same price as the products page
-    login_to_saucedemo(page)
+    login_page.login()
 
-    backpack = page.locator(".inventory_item").filter(has_text="Sauce Labs Backpack")
-    price = backpack.locator(".inventory_item_price").inner_text()
-    page.click("button[data-test='add-to-cart-sauce-labs-backpack']")
+    price = inventory_page.card(BACKPACK).price.inner_text()
+    inventory_page.add_to_cart(BACKPACK)
 
-    page.click(".shopping_cart_link")
-    cart_item = page.locator(".cart_item")
-    expect(cart_item).to_have_count(1)
-    expect(cart_item.locator(".cart_quantity")).to_have_text("1")
-    expect(cart_item.locator(".inventory_item_name")).to_have_text("Sauce Labs Backpack")
-    expect(cart_item.locator(".inventory_item_price")).to_have_text(price)
+    inventory_page.open_cart()
+    expect(cart_page.items).to_have_count(1)
+    expect(cart_page.item_quantities).to_have_text("1")
+    expect(cart_page.item_names).to_have_text(BACKPACK.name)
+    expect(cart_page.item_prices).to_have_text(price)
 
-def test_cart_navigation(page: Page):
+def test_cart_navigation(
+    login_page: LoginPage, inventory_page: InventoryPage, cart_page: CartPage, checkout_info_page: CheckoutInfoPage
+):
     # Positive: Continue Shopping and Checkout buttons on the cart page
-    login_to_saucedemo(page)
-    page.click("button[data-test='add-to-cart-sauce-labs-backpack']")
+    login_page.login()
+    inventory_page.add_to_cart(BACKPACK)
 
     # Continue Shopping goes back to the products page and keeps the cart
-    page.click(".shopping_cart_link")
-    page.click("button[data-test='continue-shopping']")
-    expect(page).to_have_url(INVENTORY_URL)
-    expect(page.locator(".shopping_cart_badge")).to_have_text("1")
+    inventory_page.open_cart()
+    cart_page.continue_shopping()
+    inventory_page.expect_loaded()
+    expect(inventory_page.cart_badge).to_have_text("1")
 
     # Checkout opens the first checkout step
-    page.click(".shopping_cart_link")
-    page.click("button[data-test='checkout']")
-    expect(page).to_have_url(f"{BASE_URL}/checkout-step-one.html")
+    inventory_page.open_cart()
+    cart_page.checkout()
+    checkout_info_page.expect_loaded()
 
-def test_cart_requires_login(page: Page):
+def test_cart_requires_login(login_page: LoginPage, cart_page: CartPage):
     # Negative: the cart page can't be opened without logging in
-    page.goto(f"{BASE_URL}/cart.html")
+    cart_page.open()
 
-    expect(page).to_have_url(f"{BASE_URL}/")
-    expect(get_error_message(page)).to_have_text(
-        "Epic sadface: You can only access '/cart.html' when you are logged in."
-    )
+    login_page.expect_access_denied("/cart.html")
 
 @pytest.mark.parametrize("username", BROKEN_CART_USERS)
-def test_broken_add_to_cart_buttons(page: Page, username: str):
+def test_broken_add_to_cart_buttons(login_page: LoginPage, inventory_page: InventoryPage, username: str):
     # Negative: some "Add to cart" buttons do nothing for these users
-    login_to_saucedemo(page, username=username)
+    login_page.login(username)
 
     for product in BROKEN_ADD_PRODUCTS:
-        add_button = page.locator(f"button[data-test='add-to-cart-{product.slug}']")
-        add_button.click()
-        expect(add_button).to_be_visible()
-    cart_badge = page.locator(".shopping_cart_badge")
-    expect(cart_badge).to_be_hidden()
+        inventory_page.add_to_cart(product)
+        expect(inventory_page.add_button(product)).to_be_visible()
+    expect(inventory_page.cart_badge).to_be_hidden()
 
     # A working product still adds, and the badge counts only that one
-    page.click("button[data-test='add-to-cart-sauce-labs-backpack']")
-    expect(cart_badge).to_have_text("1")
+    inventory_page.add_to_cart(BACKPACK)
+    expect(inventory_page.cart_badge).to_have_text("1")
 
 @pytest.mark.parametrize("username", BROKEN_CART_USERS)
-def test_broken_remove_button(page: Page, username: str):
+def test_broken_remove_button(login_page: LoginPage, inventory_page: InventoryPage, username: str):
     # Negative: "Remove" on the products page does nothing for these users
-    login_to_saucedemo(page, username=username)
+    login_page.login(username)
 
-    page.click("button[data-test='add-to-cart-sauce-labs-backpack']")
-    cart_badge = page.locator(".shopping_cart_badge")
-    expect(cart_badge).to_have_text("1")
+    inventory_page.add_to_cart(BACKPACK)
+    expect(inventory_page.cart_badge).to_have_text("1")
 
-    remove_button = page.locator("button[data-test='remove-sauce-labs-backpack']")
-    remove_button.click()
-    expect(remove_button).to_be_visible()
-    expect(cart_badge).to_have_text("1")
+    inventory_page.remove(BACKPACK)
+    expect(inventory_page.remove_button(BACKPACK)).to_be_visible()
+    expect(inventory_page.cart_badge).to_have_text("1")
 
     # Adding another product proves the Remove click was handled and ignored
-    page.click("button[data-test='add-to-cart-sauce-labs-bike-light']")
-    expect(cart_badge).to_have_text("2")
+    inventory_page.add_to_cart(BIKE_LIGHT)
+    expect(inventory_page.cart_badge).to_have_text("2")
 
 @pytest.mark.xfail(reason="saucedemo bug: checkout is allowed with an empty cart", strict=True)
-def test_checkout_disabled_for_empty_cart(page: Page):
+def test_checkout_disabled_for_empty_cart(login_page: LoginPage, inventory_page: InventoryPage, cart_page: CartPage):
     # Negative: Checkout should be blocked when the cart is empty
-    login_to_saucedemo(page)
+    login_page.login()
 
-    page.click(".shopping_cart_link")
-    expect(page).to_have_url(f"{BASE_URL}/cart.html")
-    expect(page.locator(".cart_item")).to_have_count(0)
-    expect(page.locator("button[data-test='checkout']")).to_be_disabled()
+    inventory_page.open_cart()
+    cart_page.expect_loaded()
+    expect(cart_page.items).to_have_count(0)
+    expect(cart_page.checkout_button).to_be_disabled()
 
-def test_add_all_items_to_cart(page: Page):
+def test_add_all_items_to_cart(login_page: LoginPage, inventory_page: InventoryPage, cart_page: CartPage):
     # Edge case: fill the cart with every product in the store
-    login_to_saucedemo(page)
-
-    # all_inner_texts() doesn't auto-wait, so wait for the products to render first
-    product_locator = page.locator(".inventory_item_name")
-    expect(product_locator).to_have_count(6)
-    product_names = product_locator.all_inner_texts()
+    login_page.login()
+    product_names = inventory_page.get_names()
 
     # Each click turns that button into "Remove", so always click the first remaining "Add to cart"
-    add_buttons = page.locator("button[data-test^='add-to-cart']")
     for _ in product_names:
-        add_buttons.first.click()
+        inventory_page.add_buttons.first.click()
 
-    expect(add_buttons).to_have_count(0)
-    expect(page.locator(".shopping_cart_badge")).to_have_text("6")
+    expect(inventory_page.add_buttons).to_have_count(0)
+    expect(inventory_page.cart_badge).to_have_text("6")
 
     # Cart lists every product, in the same order as the inventory page
-    page.click(".shopping_cart_link")
-    expect(page.locator(".cart_item .inventory_item_name")).to_have_text(product_names)
+    inventory_page.open_cart()
+    expect(cart_page.item_names).to_have_text(product_names)
 
-def test_remove_last_item_empties_cart(page: Page):
+def test_remove_last_item_empties_cart(login_page: LoginPage, inventory_page: InventoryPage, cart_page: CartPage):
     # Edge case: removing the only item hides the badge entirely (it never shows "0")
-    login_to_saucedemo(page)
+    login_page.login()
 
-    page.click("button[data-test='add-to-cart-sauce-labs-backpack']")
-    cart_badge = page.locator(".shopping_cart_badge")
-    expect(cart_badge).to_have_text("1")
+    inventory_page.add_to_cart(BACKPACK)
+    expect(inventory_page.cart_badge).to_have_text("1")
 
-    page.click(".shopping_cart_link")
-    page.click("button[data-test='remove-sauce-labs-backpack']")
+    inventory_page.open_cart()
+    cart_page.remove(BACKPACK)
 
-    expect(page.locator(".cart_item")).to_have_count(0)
-    expect(cart_badge).to_be_hidden()
+    expect(cart_page.items).to_have_count(0)
+    expect(cart_page.cart_badge).to_be_hidden()
 
     # Back on the inventory page the button is "Add to cart" again
-    page.click("button[data-test='continue-shopping']")
-    expect(page.locator("button[data-test='add-to-cart-sauce-labs-backpack']")).to_be_visible()
+    cart_page.continue_shopping()
+    expect(inventory_page.add_button(BACKPACK)).to_be_visible()
 
-def test_cart_persists_after_logout(page: Page):
+def test_cart_persists_after_logout(login_page: LoginPage, inventory_page: InventoryPage, cart_page: CartPage, menu: Menu):
     # Edge case: the cart lives in the browser's localStorage, so it survives logging out and back in
-    login_to_saucedemo(page)
+    login_page.login()
 
-    page.click("button[data-test='add-to-cart-sauce-labs-backpack']")
-    expect(page.locator(".shopping_cart_badge")).to_have_text("1")
+    inventory_page.add_to_cart(BACKPACK)
+    expect(inventory_page.cart_badge).to_have_text("1")
 
-    logout_from_saucedemo(page)
-    expect(page).to_have_url(f"{BASE_URL}/")
+    menu.logout()
+    login_page.expect_loaded()
 
-    login_to_saucedemo(page)
+    login_page.login()
 
-    expect(page.locator(".shopping_cart_badge")).to_have_text("1")
-    page.click(".shopping_cart_link")
-    expect(page.locator(".cart_item .inventory_item_name")).to_have_text("Sauce Labs Backpack")
+    expect(inventory_page.cart_badge).to_have_text("1")
+    inventory_page.open_cart()
+    expect(cart_page.item_names).to_have_text(BACKPACK.name)

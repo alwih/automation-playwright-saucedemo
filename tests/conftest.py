@@ -1,32 +1,73 @@
 import pytest
 import pytest_asyncio
 from playwright.async_api import async_playwright
-from playwright.sync_api import Page, expect
-from config import BASE_URL
-from data.users import PASSWORD
+from playwright.sync_api import Page, Playwright
+from pages.cart_page import CartPage
+from pages.checkout_pages import CheckoutCompletePage, CheckoutInfoPage, CheckoutOverviewPage
+from pages.components import Footer, Menu
+from pages.dynamic_catalog import LazyLoadPage, SliderPage, SpinnerPage
+from pages.inventory_page import InventoryPage
+from pages.login_page import LoginPage
+from pages.product_page import ProductPage
 
-INVENTORY_URL = f"{BASE_URL}/inventory.html"
+# ---------------------------------------------------------------------------
+# Page objects: each fixture wraps the test's `page`, so they all drive the same tab
+# ---------------------------------------------------------------------------
 
-def login_to_saucedemo(page: Page, username: str = "standard_user", password: str = PASSWORD):
-    page.goto(BASE_URL)
-    page.fill("input#user-name", username)
-    page.fill("input#password", password)
-    page.click("input#login-button")
+@pytest.fixture(scope="session")
+def browser_context_args(browser_context_args: dict, playwright: Playwright) -> dict:
+    # Extends pytest-playwright's fixture so get_by_test_id("x") matches data-test="x", the attribute SauceDemo uses.
+    # Only sync tests request it, so sync Playwright still starts after the async tests (see the sort hook below)
+    playwright.selectors.set_test_id_attribute("data-test")
+    return browser_context_args
 
-def logout_from_saucedemo(page: Page):
-    """Logout through the burger menu"""
-    page.click("#react-burger-menu-btn")
-    page.click("#logout_sidebar_link")
+@pytest.fixture
+def login_page(page: Page) -> LoginPage:
+    return LoginPage(page)
 
-def get_error_message(page: Page):
-    """Locator for the error banner on the login page"""
-    return page.locator("[data-test='error']")
+@pytest.fixture
+def inventory_page(page: Page) -> InventoryPage:
+    return InventoryPage(page)
 
-def expect_inventory_page(page: Page, timeout: float = 5000):
-    """Assert the user landed on the Products (inventory) page"""
-    expect(page).to_have_url(INVENTORY_URL, timeout=timeout)
-    expect(page.locator(".inventory_list")).to_be_visible(timeout=timeout)
-    expect(page.locator("[data-test='title']")).to_have_text("Products", timeout=timeout)
+@pytest.fixture
+def product_page(page: Page) -> ProductPage:
+    return ProductPage(page)
+
+@pytest.fixture
+def cart_page(page: Page) -> CartPage:
+    return CartPage(page)
+
+@pytest.fixture
+def checkout_info_page(page: Page) -> CheckoutInfoPage:
+    return CheckoutInfoPage(page)
+
+@pytest.fixture
+def checkout_overview_page(page: Page) -> CheckoutOverviewPage:
+    return CheckoutOverviewPage(page)
+
+@pytest.fixture
+def checkout_complete_page(page: Page) -> CheckoutCompletePage:
+    return CheckoutCompletePage(page)
+
+@pytest.fixture
+def lazy_load_page(page: Page) -> LazyLoadPage:
+    return LazyLoadPage(page)
+
+@pytest.fixture
+def spinner_page(page: Page) -> SpinnerPage:
+    return SpinnerPage(page)
+
+@pytest.fixture
+def slider_page(page: Page) -> SliderPage:
+    return SliderPage(page)
+
+@pytest.fixture
+def menu(page: Page) -> Menu:
+    return Menu(page)
+
+@pytest.fixture
+def footer(page: Page) -> Footer:
+    return Footer(page)
 
 # ---------------------------------------------------------------------------
 # Async API: only test_concurrency_async.py uses it
