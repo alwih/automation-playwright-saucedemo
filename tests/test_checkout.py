@@ -11,11 +11,11 @@ TAX_RATE = 0.08
 
 @pytest.fixture
 def go_to_checkout(
-    login_page: LoginPage, inventory_page: InventoryPage, cart_page: CartPage, checkout_info_page: CheckoutInfoPage
+    login_as, inventory_page: InventoryPage, cart_page: CartPage, checkout_info_page: CheckoutInfoPage
 ):
     """Log in, add the products to the cart and open the first checkout step"""
     def go(products: tuple[Product, ...] = (BACKPACK,), username: str = "standard_user"):
-        login_page.login(username)
+        login_as(username)
         for product in products:
             inventory_page.add_to_cart(product)
         inventory_page.open_cart()
@@ -77,14 +77,14 @@ def test_checkout_overview_totals(
     expect(checkout_overview_page.shipping_info).to_have_text("Free Pony Express Delivery!")
 
 def test_checkout_overview_lists_items(
-    login_page: LoginPage,
+    login_as,
     inventory_page: InventoryPage,
     cart_page: CartPage,
     checkout_info_page: CheckoutInfoPage,
     checkout_overview_page: CheckoutOverviewPage,
 ):
     # Positive: the overview lists the same items as the cart
-    login_page.login()
+    login_as()
     inventory_page.add_to_cart(BACKPACK)
     inventory_page.add_to_cart(BIKE_LIGHT)
     inventory_page.open_cart()

@@ -51,7 +51,7 @@ We use `conda` to manage a clean Python environment (Python 3.11). Follow these 
 │   ├── components.py           # Menu (burger menu) and Footer, on every logged-in page
 │   └── dynamic_catalog.py      # LazyLoadPage, SpinnerPage, SliderPage
 ├── tests/
-│   ├── conftest.py             # Page object fixtures and the async browser fixture
+│   ├── conftest.py             # Page object fixtures, cookie login (login_as) and the async browser fixture
 │   ├── test_login.py           # Login tests (step-by-step)
 │   ├── test_cart.py            # Cart tests (positive, negative and edge cases)
 │   ├── test_checkout.py        # Checkout tests
@@ -74,8 +74,8 @@ We use `conda` to manage a clean Python environment (Python 3.11). Follow these 
 Tests don't hold selectors. Each page of the site has a class in `pages/` that owns its locators and actions, and `tests/conftest.py` passes each one to the tests as a fixture: `login_page`, `inventory_page`, `product_page`, `cart_page`, `checkout_info_page`, `checkout_overview_page`, `checkout_complete_page`, `lazy_load_page`, `spinner_page`, `slider_page`, `menu` and `footer`. They all wrap the same `page`, so a test asks for as many as it needs:
 
 ```python
-def test_add_to_cart(login_page: LoginPage, inventory_page: InventoryPage, cart_page: CartPage):
-    login_page.login()
+def test_add_to_cart(login_as, inventory_page: InventoryPage, cart_page: CartPage):
+    login_as()  # cookie login, see "Logging in with the session cookie" below
 
     inventory_page.add_to_cart(BACKPACK)
     expect(inventory_page.cart_badge).to_have_text("1")
@@ -119,6 +119,30 @@ Without this, each test would get its own event loop and couldn't use the shared
 
 ### Running sync and async tests in the same run
 Once sync Playwright starts, it keeps its event loop marked as "running" until the pytest session ends, and any async test that runs after it fails. To avoid this, a hook in `conftest.py` (`pytest_collection_modifyitems`) moves **async tests to the front** of the run. That's why `test_concurrency_async.py` runs before the sync files when you call plain `pytest`. This also works with `pytest -n`.
+
+### Logging in with the session cookie
+SauceDemo keeps the whole session in one cookie, `session-username=<user>`, and each page reads it on load. So a test that isn't about logging in doesn't need the login form. The `login_as` fixture in `conftest.py` sets the cookie, opens the Products page and waits for it to load:
+
+```python
+def test_problem_user_about_link_is_404(login_as, menu: Menu):
+    login_as("problem_user")
+    menu.open()
+
+    expect(menu.about_link).to_have_attribute("href", ABOUT_404_URL)
+```
+
+- **Where it's used:** every cart, checkout, sorting, product detail, menu and Dynamic Catalog test.
+- **Where the form stays:** all of `test_login.py`, `test_concurrency_async.py` (concurrent logins are its point), and the second login in `test_cart_persists_after_logout` (logging back in through the form is what it checks).
+- **The per-user bugs still show.** problem_user's broken images and buttons and error_user's sort alert come from the cookie, not from the form.
+
+Measured on Chromium, headless:
+
+| | UI login | Cookie login |
+| --- | --- | --- |
+| One login, until the Products page has loaded (median of 20) | 348 ms | 227 ms (−35%) |
+| `pytest -n 2`, whole suite (median of 3) | 61.4 s | 57.3 s (−7%) |
+
+The suite gains less than the single login, because SauceDemo's login runs in the browser with no server round trip, and the 23 login and concurrency tests still use the form. On a site with a real server-side login, skipping the form saves more.
 
 ### Key Selectors for SauceDemo:
 - **Username:** `input#user-name`
