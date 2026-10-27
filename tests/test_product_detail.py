@@ -1,121 +1,106 @@
 import pytest
 from playwright.sync_api import Page, expect
-from config import BASE_URL
-from conftest import (
-    expect_inventory_page,
-    get_error_message,
-    login_to_saucedemo,
-)
-from data.products import BACKPACK, FLEECE_JACKET, PRODUCTS, Product
+from data.products import BACKPACK, BOLT_T_SHIRT, FLEECE_JACKET, PRODUCTS, Product
 from data.users import BROKEN_CART_USERS
+from pages.cart_page import CartPage
+from pages.inventory_page import InventoryPage
+from pages.login_page import LoginPage
+from pages.product_page import ProductPage
 
-ITEM_URL = f"{BASE_URL}/inventory-item.html"
-# The detail page reuses the products page's data-test names, so every read is scoped to this container
-DETAILS = ".inventory_details_container"
-DETAIL_NAME = f"{DETAILS} [data-test='inventory-item-name']"
 NOT_FOUND_NAME = "ITEM NOT FOUND"
 
-def get_product_card(page: Page, name: str):
-    """Locator for one product's card on the products page"""
-    return page.locator("[data-test='inventory-item']").filter(has_text=name)
-
-def go_to_product(page: Page, query: str, username: str = "standard_user"):
-    """Log in, then open the detail page URL directly (query is e.g. '?id=4')"""
-    login_to_saucedemo(page, username=username)
-    # Wait for the login to finish first, so the goto can't race it
-    expect_inventory_page(page)
-    page.goto(f"{ITEM_URL}{query}")
-
-def expect_product_page(page: Page, product_id: int, name: str):
-    """Assert the user is on the detail page of this product"""
-    expect(page).to_have_url(f"{ITEM_URL}?id={product_id}")
-    expect(page.locator(DETAIL_NAME)).to_have_text(name)
+@pytest.fixture
+def go_to_product(login_page: LoginPage, inventory_page: InventoryPage, product_page: ProductPage):
+    """Log in, then open a detail page URL directly (query is e.g. '?id=4')"""
+    def go(query: str, username: str = "standard_user"):
+        login_page.login(username)
+        # Wait for the login to finish first, so the goto can't race it
+        inventory_page.expect_loaded()
+        product_page.open(query)
+    return go
 
 @pytest.mark.parametrize("product", PRODUCTS, ids=lambda product: product.slug)
-def test_detail_matches_inventory_card(page: Page, product: Product):
+def test_detail_matches_inventory_card(
+    login_page: LoginPage, inventory_page: InventoryPage, product_page: ProductPage, product: Product
+):
     # Positive: the detail page shows the same description, price and image as the product's card
-    login_to_saucedemo(page)
-    card = get_product_card(page, product.name)
-    description = card.locator("[data-test='inventory-item-desc']").inner_text()
-    price = card.locator("[data-test='inventory-item-price']").inner_text()
-    image = card.locator("img").get_attribute("src")
+    login_page.login()
+    card = inventory_page.card(product)
+    description = card.description.inner_text()
+    price = card.price.inner_text()
+    image = card.image.get_attribute("src")
 
-    card.locator("[data-test='inventory-item-name']").click()
+    card.name.click()
 
-    expect_product_page(page, product.id, product.name)
-    details = page.locator(DETAILS)
-    expect(details.locator("[data-test='inventory-item-desc']")).to_have_text(description)
-    expect(details.locator("[data-test='inventory-item-price']")).to_have_text(price)
-    expect(details.locator(".inventory_details_img")).to_have_attribute("src", image)
+    product_page.expect_product(product.id, product.name)
+    expect(product_page.description).to_have_text(description)
+    expect(product_page.price).to_have_text(price)
+    expect(product_page.image).to_have_attribute("src", image)
 
-def test_open_product_from_image(page: Page):
+def test_open_product_from_image(login_page: LoginPage, inventory_page: InventoryPage, product_page: ProductPage):
     # Positive: the product image opens the same detail page as the name
-    login_to_saucedemo(page)
+    login_page.login()
 
-    page.click("[data-test='item-4-img-link']")
+    inventory_page.card(BACKPACK).image.click()
 
-    expect_product_page(page, 4, "Sauce Labs Backpack")
+    product_page.expect_product(BACKPACK.id, BACKPACK.name)
 
-def test_back_to_products(page: Page):
+def test_back_to_products(login_page: LoginPage, inventory_page: InventoryPage, product_page: ProductPage):
     # Positive: Back to Products returns to the products page
-    login_to_saucedemo(page)
-    page.click("[data-test='item-4-title-link']")
-    expect_product_page(page, 4, "Sauce Labs Backpack")
+    login_page.login()
+    inventory_page.card(BACKPACK).name.click()
+    product_page.expect_product(BACKPACK.id, BACKPACK.name)
 
-    page.click("button[data-test='back-to-products']")
+    product_page.back_to_products()
 
-    expect_inventory_page(page)
+    inventory_page.expect_loaded()
 
-def test_remove_from_detail_page(page: Page):
+def test_remove_from_detail_page(login_page: LoginPage, inventory_page: InventoryPage, product_page: ProductPage):
     # Positive: an item already in the cart shows Remove on its detail page, and Remove works there
-    login_to_saucedemo(page)
-    page.click("button[data-test='add-to-cart-sauce-labs-backpack']")
-    cart_badge = page.locator(".shopping_cart_badge")
-    expect(cart_badge).to_have_text("1")
+    login_page.login()
+    inventory_page.add_to_cart(BACKPACK)
+    expect(inventory_page.cart_badge).to_have_text("1")
 
-    page.click("[data-test='item-4-title-link']")
-    expect_product_page(page, 4, "Sauce Labs Backpack")
-    page.click("button[data-test='remove']")
+    inventory_page.card(BACKPACK).name.click()
+    product_page.expect_product(BACKPACK.id, BACKPACK.name)
+    product_page.remove()
 
-    expect(cart_badge).to_be_hidden()
-    expect(page.locator("button[data-test='add-to-cart']")).to_be_visible()
+    expect(product_page.cart_badge).to_be_hidden()
+    expect(product_page.add_button).to_be_visible()
 
     # The products page shows "Add to cart" for it again
-    page.click("button[data-test='back-to-products']")
-    expect_inventory_page(page)
-    expect(page.locator("button[data-test='add-to-cart-sauce-labs-backpack']")).to_be_visible()
+    product_page.back_to_products()
+    inventory_page.expect_loaded()
+    expect(inventory_page.add_button(BACKPACK)).to_be_visible()
 
 @pytest.mark.parametrize("query", ["?id=6", "?id=99", "?id=abc", ""], ids=["id_6", "id_99", "id_abc", "no_id"])
-def test_unknown_product_id(page: Page, query: str):
+def test_unknown_product_id(page: Page, go_to_product, product_page: ProductPage, query: str):
     # Negative: an id that matches no product (6 is one past the last) shows ITEM NOT FOUND
-    go_to_product(page, query)
+    go_to_product(query)
 
-    expect(page).to_have_url(f"{ITEM_URL}{query}")
-    expect(page.locator(DETAIL_NAME)).to_have_text(NOT_FOUND_NAME)
+    expect(page).to_have_url(f"{ProductPage.URL}{query}")
+    expect(product_page.name).to_have_text(NOT_FOUND_NAME)
 
 @pytest.mark.xfail(reason="saucedemo bug: the ITEM NOT FOUND page adds an item the cart can't show", strict=True)
-def test_not_found_item_cannot_be_added_to_cart(page: Page):
+def test_not_found_item_cannot_be_added_to_cart(go_to_product, product_page: ProductPage, cart_page: CartPage):
     # Negative: Add to cart on ITEM NOT FOUND shouldn't put anything in the cart
-    go_to_product(page, "?id=99")
-    expect(page.locator(DETAIL_NAME)).to_have_text(NOT_FOUND_NAME)
+    go_to_product("?id=99")
+    expect(product_page.name).to_have_text(NOT_FOUND_NAME)
 
-    page.click("button[data-test='add-to-cart']")
+    product_page.add_to_cart()
 
     # Opening the cart proves the click was handled; today it lists nothing but the badge says "1"
-    page.click(".shopping_cart_link")
-    expect(page.locator("[data-test='title']")).to_have_text("Your Cart")
-    expect(page.locator(".cart_item")).to_have_count(0)
-    expect(page.locator(".shopping_cart_badge")).to_be_hidden()
+    product_page.open_cart()
+    expect(cart_page.title).to_have_text("Your Cart")
+    expect(cart_page.items).to_have_count(0)
+    expect(cart_page.cart_badge).to_be_hidden()
 
-def test_product_detail_requires_login(page: Page):
+def test_product_detail_requires_login(login_page: LoginPage, product_page: ProductPage):
     # Negative: a detail page can't be opened without logging in
-    page.goto(f"{ITEM_URL}?id=4")
+    product_page.open(f"?id={BACKPACK.id}")
 
-    expect(page).to_have_url(f"{BASE_URL}/")
     # The error names the page without its ?id=4 query
-    expect(get_error_message(page)).to_have_text(
-        "Epic sadface: You can only access '/inventory-item.html' when you are logged in."
-    )
+    login_page.expect_access_denied("/inventory-item.html")
 
 @pytest.mark.parametrize(
     "product, opened_name",
@@ -125,54 +110,54 @@ def test_product_detail_requires_login(page: Page):
     ],
     ids=["backpack", "fleece_jacket"],
 )
-def test_problem_user_opens_wrong_product(page: Page, product: Product, opened_name: str):
+def test_problem_user_opens_wrong_product(
+    login_page: LoginPage, inventory_page: InventoryPage, product_page: ProductPage, product: Product, opened_name: str
+):
     # Negative: for problem_user, every product links to the next id, so another page opens
-    login_to_saucedemo(page, username="problem_user")
+    login_page.login("problem_user")
 
-    get_product_card(page, product.name).locator("[data-test='inventory-item-name']").click()
+    inventory_page.card(product).name.click()
 
-    expect_product_page(page, product.id + 1, opened_name)
+    product_page.expect_product(product.id + 1, opened_name)
 
 @pytest.mark.parametrize("username", BROKEN_CART_USERS)
-def test_broken_cart_buttons_on_detail_page(page: Page, username: str):
+def test_broken_cart_buttons_on_detail_page(
+    go_to_product, inventory_page: InventoryPage, product_page: ProductPage, username: str
+):
     # Negative: the detail page has the same broken Add / Remove buttons as the products page
-    go_to_product(page, "?id=1", username=username)
-    expect_product_page(page, 1, "Sauce Labs Bolt T-Shirt")
-    add_button = page.locator("button[data-test='add-to-cart']")
-    cart_badge = page.locator(".shopping_cart_badge")
+    go_to_product(f"?id={BOLT_T_SHIRT.id}", username=username)
+    product_page.expect_product(BOLT_T_SHIRT.id, BOLT_T_SHIRT.name)
 
     # Bolt T-Shirt can't be added
-    add_button.click()
-    expect(add_button).to_be_visible()
-    expect(cart_badge).to_be_hidden()
+    product_page.add_to_cart()
+    expect(product_page.add_button).to_be_visible()
+    expect(product_page.cart_badge).to_be_hidden()
 
     # Backpack can, and the badge counts only that one
-    page.goto(f"{ITEM_URL}?id=4")
-    expect_product_page(page, 4, "Sauce Labs Backpack")
-    add_button.click()
-    expect(cart_badge).to_have_text("1")
+    product_page.open(f"?id={BACKPACK.id}")
+    product_page.expect_product(BACKPACK.id, BACKPACK.name)
+    product_page.add_to_cart()
+    expect(product_page.cart_badge).to_have_text("1")
 
     # ...but Remove does nothing
-    remove_button = page.locator("button[data-test='remove']")
-    remove_button.click()
-    expect(remove_button).to_be_visible()
+    product_page.remove()
+    expect(product_page.remove_button).to_be_visible()
 
     # Leaving the page proves the Remove click was handled and ignored
-    page.click("button[data-test='back-to-products']")
-    expect_inventory_page(page)
-    expect(cart_badge).to_have_text("1")
-    expect(page.locator("button[data-test='remove-sauce-labs-backpack']")).to_be_visible()
+    product_page.back_to_products()
+    inventory_page.expect_loaded()
+    expect(inventory_page.cart_badge).to_have_text("1")
+    expect(inventory_page.remove_button(BACKPACK)).to_be_visible()
 
-def test_detail_page_survives_reload(page: Page):
+def test_detail_page_survives_reload(page: Page, go_to_product, product_page: ProductPage):
     # Edge case: reloading a detail page keeps the product and the cart (the cart lives in localStorage)
-    go_to_product(page, "?id=4")
-    expect_product_page(page, 4, "Sauce Labs Backpack")
-    page.click("button[data-test='add-to-cart']")
-    cart_badge = page.locator(".shopping_cart_badge")
-    expect(cart_badge).to_have_text("1")
+    go_to_product(f"?id={BACKPACK.id}")
+    product_page.expect_product(BACKPACK.id, BACKPACK.name)
+    product_page.add_to_cart()
+    expect(product_page.cart_badge).to_have_text("1")
 
     page.reload()
 
-    expect_product_page(page, 4, "Sauce Labs Backpack")
-    expect(page.locator("button[data-test='remove']")).to_be_visible()
-    expect(cart_badge).to_have_text("1")
+    product_page.expect_product(BACKPACK.id, BACKPACK.name)
+    expect(product_page.remove_button).to_be_visible()
+    expect(product_page.cart_badge).to_have_text("1")
