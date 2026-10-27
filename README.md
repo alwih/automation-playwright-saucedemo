@@ -41,8 +41,17 @@ We use `conda` to manage a clean Python environment (Python 3.11). Follow these 
 
 ```text
 .
+├── pages/                      # Page objects: one class per page, holding its locators and actions
+│   ├── base_page.py            # BasePage: URL, open(), expect_loaded(), the header and the error banner
+│   ├── login_page.py           # LoginPage: login(), expect_access_denied(path)
+│   ├── inventory_page.py       # InventoryPage (cards, add / remove, sorting) and ProductCard
+│   ├── product_page.py         # ProductPage: the product detail page
+│   ├── cart_page.py            # CartPage: rows, remove, Continue Shopping, Checkout
+│   ├── checkout_pages.py       # CheckoutInfoPage, CheckoutOverviewPage, CheckoutCompletePage
+│   ├── components.py           # Menu (burger menu) and Footer, on every logged-in page
+│   └── dynamic_catalog.py      # LazyLoadPage, SpinnerPage, SliderPage
 ├── tests/
-│   ├── conftest.py             # Shared sync helpers and the async browser fixture
+│   ├── conftest.py             # Page object fixtures and the async browser fixture
 │   ├── test_login.py           # Login tests (step-by-step)
 │   ├── test_cart.py            # Cart tests (positive, negative and edge cases)
 │   ├── test_checkout.py        # Checkout tests
@@ -61,19 +70,27 @@ We use `conda` to manage a clean Python environment (Python 3.11). Follow these 
 └── .gitignore
 ```
 
-### `conftest.py`, the shared toolbox
-pytest loads `tests/conftest.py` automatically. It holds the helpers the test files share. Test data lives in `data/` and the site URL in `config.py`:
+### Page objects
+Tests don't hold selectors. Each page of the site has a class in `pages/` that owns its locators and actions, and `tests/conftest.py` passes each one to the tests as a fixture: `login_page`, `inventory_page`, `product_page`, `cart_page`, `checkout_info_page`, `checkout_overview_page`, `checkout_complete_page`, `lazy_load_page`, `spinner_page`, `slider_page`, `menu` and `footer`. They all wrap the same `page`, so a test asks for as many as it needs:
 
-| What | Name |
-| --- | --- |
-| Constants | `BASE_URL` (`config.py`), `INVENTORY_URL`, `PASSWORD` / `ACCEPTED_USERS` / `LOGIN_USERS` / `BROKEN_CART_USERS` (`data/users.py`), `Product` + `PRODUCTS` (`data/products.py`) |
-| Log in | `login_to_saucedemo(page, ...)` |
-| Log out (burger menu) | `logout_from_saucedemo(page)` |
-| Error banner locator | `get_error_message(page)` |
-| Assert on Products page | `expect_inventory_page(page, timeout)` |
-| Browser / page fixtures | `page` (from pytest-playwright); `async_browser` for the concurrency tests (defined in `conftest.py`) |
+```python
+def test_add_to_cart(login_page: LoginPage, inventory_page: InventoryPage, cart_page: CartPage):
+    login_page.login()
 
-The async helpers (`login`, `expect_inventory_page`, `new_session`) live in `test_concurrency_async.py`, the only file that uses them.
+    inventory_page.add_to_cart(BACKPACK)
+    expect(inventory_page.cart_badge).to_have_text("1")
+
+    inventory_page.open_cart()
+    cart_page.expect_loaded()
+    expect(cart_page.item_names).to_have_text(BACKPACK.name)
+```
+
+- **Locators use `get_by_test_id`.** SauceDemo marks its elements with `data-test`, so `conftest.py` makes that the test id attribute. CSS stays only where an element has no usable `data-test`. For example, the burger menu's `data-test` sits on the icon underneath the button, which can't be clicked.
+- **Checks stay in the tests.** Page objects hold only `expect_loaded()` and a few checks that several tests share, such as `LoginPage.expect_access_denied(path)` and `SliderPage.expect_slide(index)`. Expected values (labels, error texts, URLs) stay in the tests or in `data/`.
+- **Waits live in the page methods, each with a comment on why.** For example, `InventoryPage.get_names()` waits for all 6 products before reading them. `CheckoutOverviewPage.expect_loaded()` waits for the new title, because the URL changes before the page re-renders.
+- **Shared setup steps within one file are factory fixtures in that file.** For example, `go_to_checkout(products=..., username=...)` in `test_checkout.py`.
+
+Test data lives in `data/` and the site URL in `config.py`. The async helpers (`login`, `expect_inventory_page`, `new_session`) live in `test_concurrency_async.py`, the only file that uses them.
 
 ## 🧪 3. Understanding the Code
 
