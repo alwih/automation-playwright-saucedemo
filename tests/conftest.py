@@ -1,9 +1,7 @@
 import pytest
 import pytest_asyncio
 from playwright.async_api import async_playwright
-from playwright.sync_api import Page, Playwright, expect
-from config import BASE_URL
-from data.users import PASSWORD
+from playwright.sync_api import Page, Playwright
 from pages.cart_page import CartPage
 from pages.checkout_pages import CheckoutCompletePage, CheckoutInfoPage, CheckoutOverviewPage
 from pages.components import Footer, Menu
@@ -11,29 +9,6 @@ from pages.dynamic_catalog import LazyLoadPage, SliderPage, SpinnerPage
 from pages.inventory_page import InventoryPage
 from pages.login_page import LoginPage
 from pages.product_page import ProductPage
-
-INVENTORY_URL = f"{BASE_URL}/inventory.html"
-
-def login_to_saucedemo(page: Page, username: str = "standard_user", password: str = PASSWORD):
-    page.goto(BASE_URL)
-    page.fill("input#user-name", username)
-    page.fill("input#password", password)
-    page.click("input#login-button")
-
-def logout_from_saucedemo(page: Page):
-    """Logout through the burger menu"""
-    page.click("#react-burger-menu-btn")
-    page.click("#logout_sidebar_link")
-
-def get_error_message(page: Page):
-    """Locator for the error banner on the login page"""
-    return page.locator("[data-test='error']")
-
-def expect_inventory_page(page: Page, timeout: float = 5000):
-    """Assert the user landed on the Products (inventory) page"""
-    expect(page).to_have_url(INVENTORY_URL, timeout=timeout)
-    expect(page.locator(".inventory_list")).to_be_visible(timeout=timeout)
-    expect(page.locator("[data-test='title']")).to_have_text("Products", timeout=timeout)
 
 # ---------------------------------------------------------------------------
 # Page objects: each fixture wraps the test's `page`, so they all drive the same tab
