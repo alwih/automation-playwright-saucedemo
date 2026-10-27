@@ -6,7 +6,8 @@ from config import BASE_URL
 from data.users import PASSWORD
 from pages.cart_page import CartPage
 from pages.checkout_pages import CheckoutCompletePage, CheckoutInfoPage, CheckoutOverviewPage
-from pages.components import Menu
+from pages.components import Footer, Menu
+from pages.dynamic_catalog import LazyLoadPage, SliderPage, SpinnerPage
 from pages.inventory_page import InventoryPage
 from pages.login_page import LoginPage
 from pages.product_page import ProductPage
@@ -74,8 +75,24 @@ def checkout_complete_page(page: Page) -> CheckoutCompletePage:
     return CheckoutCompletePage(page)
 
 @pytest.fixture
+def lazy_load_page(page: Page) -> LazyLoadPage:
+    return LazyLoadPage(page)
+
+@pytest.fixture
+def spinner_page(page: Page) -> SpinnerPage:
+    return SpinnerPage(page)
+
+@pytest.fixture
+def slider_page(page: Page) -> SliderPage:
+    return SliderPage(page)
+
+@pytest.fixture
 def menu(page: Page) -> Menu:
     return Menu(page)
+
+@pytest.fixture
+def footer(page: Page) -> Footer:
+    return Footer(page)
 
 # ---------------------------------------------------------------------------
 # Async API: only test_concurrency_async.py uses it
