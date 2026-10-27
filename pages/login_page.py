@@ -11,8 +11,6 @@ class LoginPage(BasePage):
         self.username_input = page.get_by_test_id("username")
         self.password_input = page.get_by_test_id("password")
         self.login_button = page.get_by_test_id("login-button")
-        self.error = page.get_by_test_id("error")
-        self.error_close_button = page.get_by_test_id("error-button")
         # The list of accepted usernames under the form
         self.credentials = page.get_by_test_id("login-credentials")
 
@@ -22,9 +20,6 @@ class LoginPage(BasePage):
         self.username_input.fill(username)
         self.password_input.fill(password)
         self.login_button.click()
-
-    def close_error(self):
-        self.error_close_button.click()
 
     def expect_loaded(self):
         expect(self.page).to_have_url(self.URL)

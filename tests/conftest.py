@@ -5,9 +5,11 @@ from playwright.sync_api import Page, Playwright, expect
 from config import BASE_URL
 from data.users import PASSWORD
 from pages.cart_page import CartPage
+from pages.checkout_pages import CheckoutCompletePage, CheckoutInfoPage, CheckoutOverviewPage
 from pages.components import Menu
 from pages.inventory_page import InventoryPage
 from pages.login_page import LoginPage
+from pages.product_page import ProductPage
 
 INVENTORY_URL = f"{BASE_URL}/inventory.html"
 
@@ -52,8 +54,24 @@ def inventory_page(page: Page) -> InventoryPage:
     return InventoryPage(page)
 
 @pytest.fixture
+def product_page(page: Page) -> ProductPage:
+    return ProductPage(page)
+
+@pytest.fixture
 def cart_page(page: Page) -> CartPage:
     return CartPage(page)
+
+@pytest.fixture
+def checkout_info_page(page: Page) -> CheckoutInfoPage:
+    return CheckoutInfoPage(page)
+
+@pytest.fixture
+def checkout_overview_page(page: Page) -> CheckoutOverviewPage:
+    return CheckoutOverviewPage(page)
+
+@pytest.fixture
+def checkout_complete_page(page: Page) -> CheckoutCompletePage:
+    return CheckoutCompletePage(page)
 
 @pytest.fixture
 def menu(page: Page) -> Menu:

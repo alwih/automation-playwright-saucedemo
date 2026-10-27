@@ -5,6 +5,16 @@ from config import BASE_URL
 from data.products import PRODUCTS, Product
 from pages.base_page import BasePage
 
+class ProductCard:
+    """One product's card on the Products page"""
+
+    def __init__(self, root: Locator):
+        self.root = root
+        self.name = root.get_by_test_id("inventory-item-name")
+        self.description = root.get_by_test_id("inventory-item-desc")
+        self.price = root.get_by_test_id("inventory-item-price")
+        self.image = root.get_by_test_id(re.compile(r"^inventory-item-.+-img$"))
+
 class InventoryPage(BasePage):
     """The Products page, where a logged-in user lands"""
 
@@ -36,8 +46,8 @@ class InventoryPage(BasePage):
         expect(self.list).to_be_visible(timeout=timeout)
         expect(self.title).to_have_text("Products", timeout=timeout)
 
-    def card(self, product: Product) -> Locator:
-        return self.cards.filter(has_text=product.name)
+    def card(self, product: Product) -> ProductCard:
+        return ProductCard(self.cards.filter(has_text=product.name))
 
     def add_button(self, product: Product) -> Locator:
         return self.page.get_by_test_id(f"add-to-cart-{product.slug}")

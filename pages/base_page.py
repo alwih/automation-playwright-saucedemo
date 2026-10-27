@@ -14,12 +14,18 @@ class BasePage:
         self.cart_link = page.get_by_test_id("shopping-cart-link")
         # No data-test here; visual_user's misplaced cart icon shows up as a class on it
         self.cart_container = page.locator(".shopping_cart_container")
+        # The error banner of the login and checkout forms
+        self.error = page.get_by_test_id("error")
+        self.error_close_button = page.get_by_test_id("error-button")
 
     def open(self):
         self.page.goto(self.URL)
 
     def open_cart(self):
         self.cart_link.click()
+
+    def close_error(self):
+        self.error_close_button.click()
 
     def expect_loaded(self):
         """Assert the user is on this page"""
