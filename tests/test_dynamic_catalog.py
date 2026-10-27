@@ -3,7 +3,6 @@ from playwright.sync_api import Page, expect
 from config import BASE_URL
 from data.products import PRODUCTS
 from pages.dynamic_catalog import DynamicCatalogPage, LazyLoadPage, SliderPage, SpinnerPage
-from pages.inventory_page import InventoryPage
 from pages.login_page import LoginPage
 
 # At pytest-playwright's default 1280x720 viewport (4 cards per row, 2 rows on screen) the page
@@ -22,12 +21,10 @@ SPINNER_MAX_MS = 3000
 SLIDE_MS = 2000
 
 @pytest.fixture
-def go_to_dynamic_page(login_page: LoginPage, inventory_page: InventoryPage):
+def go_to_dynamic_page(login_as):
     """Log in, then open a Dynamic Catalog page by URL"""
     def go(dynamic_page: DynamicCatalogPage, freeze_clock: bool = False):
-        login_page.login()
-        # Wait for the login to finish first, so the goto can't race it
-        inventory_page.expect_loaded()
+        login_as()
         dynamic_page.open(freeze_clock=freeze_clock)
     return go
 

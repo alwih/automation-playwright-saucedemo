@@ -10,21 +10,19 @@ from pages.product_page import ProductPage
 NOT_FOUND_NAME = "ITEM NOT FOUND"
 
 @pytest.fixture
-def go_to_product(login_page: LoginPage, inventory_page: InventoryPage, product_page: ProductPage):
+def go_to_product(login_as, product_page: ProductPage):
     """Log in, then open a detail page URL directly (query is e.g. '?id=4')"""
     def go(query: str, username: str = "standard_user"):
-        login_page.login(username)
-        # Wait for the login to finish first, so the goto can't race it
-        inventory_page.expect_loaded()
+        login_as(username)
         product_page.open(query)
     return go
 
 @pytest.mark.parametrize("product", PRODUCTS, ids=lambda product: product.slug)
 def test_detail_matches_inventory_card(
-    login_page: LoginPage, inventory_page: InventoryPage, product_page: ProductPage, product: Product
+    login_as, inventory_page: InventoryPage, product_page: ProductPage, product: Product
 ):
     # Positive: the detail page shows the same description, price and image as the product's card
-    login_page.login()
+    login_as()
     card = inventory_page.card(product)
     description = card.description.inner_text()
     price = card.price.inner_text()
@@ -37,17 +35,17 @@ def test_detail_matches_inventory_card(
     expect(product_page.price).to_have_text(price)
     expect(product_page.image).to_have_attribute("src", image)
 
-def test_open_product_from_image(login_page: LoginPage, inventory_page: InventoryPage, product_page: ProductPage):
+def test_open_product_from_image(login_as, inventory_page: InventoryPage, product_page: ProductPage):
     # Positive: the product image opens the same detail page as the name
-    login_page.login()
+    login_as()
 
     inventory_page.card(BACKPACK).image.click()
 
     product_page.expect_product(BACKPACK.id, BACKPACK.name)
 
-def test_back_to_products(login_page: LoginPage, inventory_page: InventoryPage, product_page: ProductPage):
+def test_back_to_products(login_as, inventory_page: InventoryPage, product_page: ProductPage):
     # Positive: Back to Products returns to the products page
-    login_page.login()
+    login_as()
     inventory_page.card(BACKPACK).name.click()
     product_page.expect_product(BACKPACK.id, BACKPACK.name)
 
@@ -55,9 +53,9 @@ def test_back_to_products(login_page: LoginPage, inventory_page: InventoryPage, 
 
     inventory_page.expect_loaded()
 
-def test_remove_from_detail_page(login_page: LoginPage, inventory_page: InventoryPage, product_page: ProductPage):
+def test_remove_from_detail_page(login_as, inventory_page: InventoryPage, product_page: ProductPage):
     # Positive: an item already in the cart shows Remove on its detail page, and Remove works there
-    login_page.login()
+    login_as()
     inventory_page.add_to_cart(BACKPACK)
     expect(inventory_page.cart_badge).to_have_text("1")
 
@@ -111,10 +109,10 @@ def test_product_detail_requires_login(login_page: LoginPage, product_page: Prod
     ids=["backpack", "fleece_jacket"],
 )
 def test_problem_user_opens_wrong_product(
-    login_page: LoginPage, inventory_page: InventoryPage, product_page: ProductPage, product: Product, opened_name: str
+    login_as, inventory_page: InventoryPage, product_page: ProductPage, product: Product, opened_name: str
 ):
     # Negative: for problem_user, every product links to the next id, so another page opens
-    login_page.login("problem_user")
+    login_as("problem_user")
 
     inventory_page.card(product).name.click()
 
