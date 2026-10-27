@@ -1,9 +1,13 @@
 import pytest
 import pytest_asyncio
 from playwright.async_api import async_playwright
-from playwright.sync_api import Page, expect
+from playwright.sync_api import Page, Playwright, expect
 from config import BASE_URL
 from data.users import PASSWORD
+from pages.cart_page import CartPage
+from pages.components import Menu
+from pages.inventory_page import InventoryPage
+from pages.login_page import LoginPage
 
 INVENTORY_URL = f"{BASE_URL}/inventory.html"
 
@@ -27,6 +31,33 @@ def expect_inventory_page(page: Page, timeout: float = 5000):
     expect(page).to_have_url(INVENTORY_URL, timeout=timeout)
     expect(page.locator(".inventory_list")).to_be_visible(timeout=timeout)
     expect(page.locator("[data-test='title']")).to_have_text("Products", timeout=timeout)
+
+# ---------------------------------------------------------------------------
+# Page objects: each fixture wraps the test's `page`, so they all drive the same tab
+# ---------------------------------------------------------------------------
+
+@pytest.fixture(scope="session")
+def browser_context_args(browser_context_args: dict, playwright: Playwright) -> dict:
+    # Extends pytest-playwright's fixture so get_by_test_id("x") matches data-test="x", the attribute SauceDemo uses.
+    # Only sync tests request it, so sync Playwright still starts after the async tests (see the sort hook below)
+    playwright.selectors.set_test_id_attribute("data-test")
+    return browser_context_args
+
+@pytest.fixture
+def login_page(page: Page) -> LoginPage:
+    return LoginPage(page)
+
+@pytest.fixture
+def inventory_page(page: Page) -> InventoryPage:
+    return InventoryPage(page)
+
+@pytest.fixture
+def cart_page(page: Page) -> CartPage:
+    return CartPage(page)
+
+@pytest.fixture
+def menu(page: Page) -> Menu:
+    return Menu(page)
 
 # ---------------------------------------------------------------------------
 # Async API: only test_concurrency_async.py uses it
