@@ -2,6 +2,7 @@ import pytest
 import pytest_asyncio
 from playwright.async_api import async_playwright
 from playwright.sync_api import Page, Playwright
+from config import BASE_URL
 from pages.cart_page import CartPage
 from pages.checkout_pages import CheckoutCompletePage, CheckoutInfoPage, CheckoutOverviewPage
 from pages.components import Footer, Menu
@@ -68,6 +69,21 @@ def menu(page: Page) -> Menu:
 @pytest.fixture
 def footer(page: Page) -> Footer:
     return Footer(page)
+
+# ---------------------------------------------------------------------------
+# Cookie login: tests that aren't about logging in skip the login form
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def login_as(page: Page, inventory_page: InventoryPage):
+    """Log in without the form, then land on the Products page: login_as() or login_as("problem_user")"""
+    # SauceDemo keeps the whole session in one cookie, session-username=<user>, and each page reads it on load
+    # (the per-user bugs come from it too). Setting it directly skips the login page and its form.
+    def login(username: str = "standard_user"):
+        page.context.add_cookies([{"name": "session-username", "value": username, "url": BASE_URL}])
+        inventory_page.open()
+        inventory_page.expect_loaded()
+    return login
 
 # ---------------------------------------------------------------------------
 # Async API: only test_concurrency_async.py uses it
